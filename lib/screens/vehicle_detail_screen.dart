@@ -1,0 +1,439 @@
+import 'package:flutter/material.dart';
+
+import '../db/database_helper.dart';
+import '../l10n/strings.dart';
+import '../models/car_document.dart';
+import '../models/component_record.dart';
+import '../models/service_record.dart';
+import '../models/vehicle.dart';
+import '../utils/date_utils.dart';
+import '../utils/maintenance_profiles.dart';
+import '../utils/vehicle_components.dart';
+import '../widgets/document_tile.dart';
+import '../widgets/service_record_tile.dart';
+import 'add_edit_document_screen.dart';
+import 'add_edit_service_record_screen.dart';
+import 'add_edit_vehicle_screen.dart';
+import 'edit_component_screen.dart';
+
+class VehicleDetailScreen extends StatefulWidget {
+  final String vehicleId;
+
+  const VehicleDetailScreen({super.key, required this.vehicleId});
+
+  @override
+  State<VehicleDetailScreen> createState() => _VehicleDetailScreenState();
+}
+
+class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
+  final _db = DatabaseHelper.instance;
+
+  Vehicle? _vehicle;
+  List<ServiceRecord> _records = [];
+  List<CarDocument> _documents = [];
+  List<ComponentRecord> _componentRecords = [];
+  Set<String> _extraComponentIds = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final vehicle = await _db.getVehicle(widget.vehicleId);
+    final records = await _db.getServiceRecords(widget.vehicleId);
+    final documents = await _db.getDocumentsForVehicle(widget.vehicleId);
+    final componentRecords = await _db.getComponentRecords(widget.vehicleId);
+    final extraComponentIds = await _db.getExtraComponentIds(widget.vehicleId);
+    if (!mounted) return;
+    setState(() {
+      _vehicle = vehicle;
+      _records = records;
+      _documents = documents;
+      _componentRecords = componentRecords;
+      _extraComponentIds = extraComponentIds;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final vehicle = _vehicle;
+    if (vehicle == null) {
+      return Scaffold(body: Center(child: Text(S.carNotFound)));
+    }
+
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(vehicle.name),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => AddEditVehicleScreen(vehicle: vehicle)),
+                );
+                _load();
+              },
+            ),
+          ],
+          bottom: TabBar(isScrollable: true, tabs: [
+            Tab(text: S.tabInfo),
+            Tab(text: S.tabService),
+            Tab(text: S.tabDocuments),
+            Tab(text: S.tabComponents),
+          ]),
+        ),
+        body: TabBarView(
+          children: [
+            _InfoTab(vehicle: vehicle, onChanged: _load),
+            _RecordsTab(vehicle: vehicle, records: _records, onChanged: _load),
+            _DocumentsTab(vehicle: vehicle, documents: _documents, onChanged: _load),
+            _ComponentsTab(
+              vehicle: vehicle,
+              componentRecords: _componentRecords,
+              extraComponentIds: _extraComponentIds,
+              onChanged: _load,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoTab extends StatelessWidget {
+  final Vehicle vehicle;
+  final VoidCallback onChanged;
+  const _InfoTab({required this.vehicle, required this.onChanged});
+
+  /// Componenta (componentele) din tabul Componente pe care se aplică un
+  /// rând `maintenance_intervals.component_name`. Potrivire pe prefix, ca să
+  /// tolereze variații ("Kit distribuție" vs "Kit distribuție (Curea + Pompă)").
+  static List<String> _componentIdsForName(String componentName) {
+    if (componentName.startsWith('Ulei motor')) return const ['engine_oil', 'oil_filter'];
+    if (componentName.startsWith('Filtru combustibil')) return const ['fuel_filter'];
+    if (componentName.startsWith('Kit distribuție')) return const ['timing_belt'];
+    return const [];
+  }
+
+  static String _engineDisplayName(Map<String, Object?>? model, String engineCode) {
+    if (model == null) return engineCode;
+    final parts = [model['brand'], model['model'], model['generation']]
+        .whereType<String>()
+        .where((s) => s.isNotEmpty);
+    return '${parts.join(' ')} ($engineCode)';
+  }
+
+  Future<void> _applyMaintenanceProfile(BuildContext context) async {
+    final db = DatabaseHelper.instance;
+    final label = '${vehicle.make} ${vehicle.model}'.trim();
+
+    final engineRows = await db.getMaintenanceIntervalsForEngineCode(vehicle.engineCode);
+    final engineModel =
+        engineRows.isNotEmpty ? await db.getVehicleModelForEngineCode(vehicle.engineCode) : null;
+    final engineDisplayName =
+        engineRows.isNotEmpty ? _engineDisplayName(engineModel, vehicle.engineCode!) : null;
+
+    final fallbackProfile = engineRows.isEmpty
+        ? resolveMaintenanceProfile(make: vehicle.make, model: vehicle.model, year: vehicle.year)
+        : null;
+
+    if (!context.mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(S.applyMaintenanceProfileTitle(label)),
+        content: Text(
+          engineRows.isNotEmpty
+              ? S.applyMaintenanceProfileBodyEngine(
+                  engineDisplayName!,
+                  engineRows.map((r) => r['component_name'] as String).toSet().join(', '),
+                )
+              : fallbackProfile != null
+                  ? S.applyMaintenanceProfileBody(fallbackProfile.displayName)
+                  : S.applyMaintenanceProfileBodyUnknown(label),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(S.cancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(S.apply)),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final existingRecords = await db.getComponentRecords(vehicle.id);
+    final recordsById = {for (final r in existingRecords) r.componentId: r};
+    var updatedCount = 0;
+    var addedCount = 0;
+
+    if (engineRows.isNotEmpty) {
+      for (final row in engineRows) {
+        final months = (row['interval_months'] as int?) == 0 ? null : row['interval_months'] as int?;
+        for (final componentId in _componentIdsForName(row['component_name'] as String)) {
+          final existing = recordsById[componentId];
+          var notes = existing?.notes;
+          if (componentId == 'engine_oil' && (notes == null || notes.isEmpty) && engineModel != null) {
+            notes = '${engineModel['oil_spec']}, ${engineModel['oil_capacity']} L';
+          }
+          await db.upsertComponentRecord(ComponentRecord(
+            vehicleId: vehicle.id,
+            componentId: componentId,
+            lastChangedDate: existing?.lastChangedDate,
+            lastChangedMileage: existing?.lastChangedMileage,
+            notes: notes,
+            customIntervalKm: row['interval_km'] as int?,
+            customIntervalMonths: months,
+            customIntervalSource: engineDisplayName,
+          ));
+          updatedCount++;
+        }
+      }
+    } else if (fallbackProfile != null) {
+      for (final componentId in const ['engine_oil', 'oil_filter']) {
+        final existing = recordsById[componentId];
+        await db.upsertComponentRecord(ComponentRecord(
+          vehicleId: vehicle.id,
+          componentId: componentId,
+          lastChangedDate: existing?.lastChangedDate,
+          lastChangedMileage: existing?.lastChangedMileage,
+          notes: existing?.notes,
+          customIntervalKm: fallbackProfile.engineOilIntervalKm,
+          customIntervalMonths: fallbackProfile.engineOilIntervalMonths,
+          customIntervalSource: fallbackProfile.displayName,
+        ));
+        updatedCount++;
+      }
+    }
+
+    final existingExtras = await db.getExtraComponentIds(vehicle.id);
+    for (final extraId in universalExtraComponentIds) {
+      if (!existingExtras.contains(extraId)) {
+        await db.addExtraComponent(vehicle.id, extraId);
+        addedCount++;
+      }
+    }
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(S.maintenanceProfileApplied(updatedCount, addedCount))),
+    );
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <MapEntry<String, String>>[
+      MapEntry(S.make, vehicle.make),
+      MapEntry(S.model, vehicle.model),
+      if (vehicle.year != null) MapEntry(S.year, vehicle.year.toString()),
+      MapEntry(S.plateNumber, vehicle.plateNumber),
+      if (vehicle.vin?.isNotEmpty == true) MapEntry(S.vin, vehicle.vin!),
+      if (vehicle.fuelType?.isNotEmpty == true) MapEntry(S.fuelType, vehicle.fuelType!),
+      if (vehicle.engineCode?.isNotEmpty == true) MapEntry(S.engineCode, vehicle.engineCode!),
+      MapEntry(S.currentMileage, '${vehicle.mileage} km'),
+    ];
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        ...rows.map((r) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  SizedBox(width: 160, child: Text(r.key, style: const TextStyle(color: Colors.grey))),
+                  Expanded(child: Text(r.value, style: const TextStyle(fontWeight: FontWeight.w600))),
+                ],
+              ),
+            )),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: () => _applyMaintenanceProfile(context),
+          icon: const Icon(Icons.checklist_rtl_outlined),
+          label: Text(S.suggestMaintenanceProfile('${vehicle.make} ${vehicle.model}'.trim())),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecordsTab extends StatelessWidget {
+  final Vehicle vehicle;
+  final List<ServiceRecord> records;
+  final VoidCallback onChanged;
+
+  const _RecordsTab({required this.vehicle, required this.records, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: records.isEmpty
+          ? Center(child: Text(S.noServiceRecordsYet))
+          : ListView.builder(
+              padding: const EdgeInsets.only(bottom: 80),
+              itemCount: records.length,
+              itemBuilder: (context, index) {
+                final r = records[index];
+                return ServiceRecordTile(
+                  record: r,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddEditServiceRecordScreen(vehicle: vehicle, record: r),
+                      ),
+                    );
+                    onChanged();
+                  },
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => AddEditServiceRecordScreen(vehicle: vehicle)),
+          );
+          onChanged();
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class _DocumentsTab extends StatelessWidget {
+  final Vehicle vehicle;
+  final List<CarDocument> documents;
+  final VoidCallback onChanged;
+
+  const _DocumentsTab({required this.vehicle, required this.documents, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: documents.isEmpty
+          ? Center(child: Text(S.noDocumentsYet))
+          : ListView.builder(
+              padding: const EdgeInsets.only(bottom: 80),
+              itemCount: documents.length,
+              itemBuilder: (context, index) {
+                final d = documents[index];
+                return DocumentTile(
+                  document: d,
+                  vehicleLabel: vehicle.name,
+                  plateNumber: vehicle.plateNumber,
+                  vin: vehicle.vin,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddEditDocumentScreen(vehicleId: vehicle.id, document: d),
+                      ),
+                    );
+                    onChanged();
+                  },
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => AddEditDocumentScreen(vehicleId: vehicle.id)),
+          );
+          onChanged();
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class _ComponentsTab extends StatelessWidget {
+  final Vehicle vehicle;
+  final List<ComponentRecord> componentRecords;
+  final Set<String> extraComponentIds;
+  final VoidCallback onChanged;
+
+  const _ComponentsTab({
+    required this.vehicle,
+    required this.componentRecords,
+    required this.extraComponentIds,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final recordsByComponent = {for (final r in componentRecords) r.componentId: r};
+    final components = [
+      ...essentialComponents,
+      ...extraComponentCatalog.where((d) => extraComponentIds.contains(d.id)),
+    ];
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 16),
+      itemCount: components.length,
+      itemBuilder: (context, index) {
+        final definition = components[index];
+        final record = recordsByComponent[definition.id];
+        final status = computeComponentStatus(
+          definition: definition,
+          record: record,
+          currentMileage: vehicle.mileage,
+        );
+
+        final subtitleParts = <String>[
+          '${S.intervalPrefix}${definition.effectiveIntervalLabel(record)}'
+              '${record?.customIntervalSource != null ? S.customIntervalSuffix(record!.customIntervalSource!) : ''}',
+          if (record?.lastChangedDate != null || record?.lastChangedMileage != null)
+            '${S.lastChangedPrefix}${formatDate(record?.lastChangedDate)}'
+                '${record?.lastChangedMileage != null ? ' · ${record!.lastChangedMileage} km' : ''}'
+          else
+            S.notSet,
+        ];
+
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: status.color.withValues(alpha: 0.15),
+            child: Icon(Icons.build_outlined, color: status.color),
+          ),
+          title: Text(definition.name),
+          subtitle: Text(subtitleParts.join('\n')),
+          isThreeLine: true,
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: status.color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              status.label,
+              style: TextStyle(color: status.color, fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+          ),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EditComponentScreen(
+                  vehicleId: vehicle.id,
+                  definition: definition,
+                  record: record,
+                ),
+              ),
+            );
+            onChanged();
+          },
+        );
+      },
+    );
+  }
+}

@@ -1,139 +1,491 @@
-/// Date de referință pe cod motor — introduse de utilizator (nu cercetate/
-/// verificate de mine), sursă declarată: Autodata. Stocate ca tabele SQLite
-/// (`vehicle_models`, `maintenance_intervals`), seedate la fiecare bump de
-/// versiune DB din `database_helper.dart` — reseed complet (DELETE + INSERT),
-/// fiindcă sunt date de catalog, nu date de utilizator.
-///
-/// Pentru actualizări viitoare: cere utilizatorului un export nou (SQL sau
-/// listă structurată), înlocuiește listele de mai jos cu conținutul nou și
-/// crește versiunea DB — nu edita rând cu rând din memorie, nu ai de unde
-/// verifica valorile.
 library;
 
-/// Un rând din `vehicle_models`: ce mașină/motorizare folosește acest cod
-/// de motor, ce ulei recomandă și ce cantitate.
-class VehicleModelRow {
-  final String brand;
-  final String model;
-  final String? generation;
-  final String engineCode;
-  final String fuelType;
-  final int hp;
-  final double oilCapacity;
-  final String oilSpec;
+/// Date de referință auto — furnizate de utilizator (nu cercetate/verificate
+/// de mine), portate din `auto_mentenanta_2.sql` (schemă MySQL) în SQLite,
+/// urmând notele de portare din chiar acel fișier: fără `ENGINE=InnoDB`,
+/// `AUTO_INCREMENT` → `INTEGER PRIMARY KEY AUTOINCREMENT`, `ENUM` → `TEXT`,
+/// `UNIQUE KEY nume (...)` → `UNIQUE (...)`.
+///
+/// Schemă relațională: `marci` → `modele` → `motoare`, cu intervale
+/// specifice per motor în `intervale_mentenanta` (mai ales distribuție —
+/// singurul lucru care chiar diferă per motor, nu per model/marcă) și
+/// fallback pe intervale generice per combustibil în `intervale_generice`
+/// pentru restul componentelor. View-ul `mentenanta_completa` combină
+/// automat cele două (COALESCE pe regula specifică, altfel cea generică).
+///
+/// **Pentru actualizări viitoare:** cere un export SQL nou, adaptează doar
+/// sintaxa (aceleași reguli de mai sus) și înlocuiește lista de mai jos —
+/// crește versiunea DB în `database_helper.dart`. **Nu reordona și nu sări
+/// peste rânduri**: `motoare`/`intervale_mentenanta` referă `model_id`/
+/// `motor_id` prin numere întregi care presupun ordinea EXACTĂ de inserare
+/// din fișierul sursă (SQLite alocă id-uri auto-increment 1,2,3... în ordinea
+/// inserării — la fel cum presupunea și schema MySQL originală).
+const List<String> referenceDataStatements = [
+  // ---------- Schemă ----------
+  """CREATE TABLE IF NOT EXISTS marci (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nume TEXT NOT NULL UNIQUE,
+    tara_origine TEXT
+  )""",
+  """CREATE TABLE IF NOT EXISTS modele (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    marca_id INTEGER NOT NULL,
+    nume TEXT NOT NULL,
+    generatie TEXT,
+    caroserie TEXT,
+    an_start INTEGER,
+    an_stop INTEGER,
+    FOREIGN KEY (marca_id) REFERENCES marci(id) ON DELETE CASCADE,
+    UNIQUE (marca_id, nume, generatie)
+  )""",
+  """CREATE TABLE IF NOT EXISTS motoare (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_id INTEGER NOT NULL,
+    cod_motor TEXT NOT NULL,
+    cod_motor_key TEXT,
+    denumire_comerciala TEXT,
+    capacitate_cm3 INTEGER,
+    putere_cp INTEGER,
+    cilindri INTEGER,
+    combustibil TEXT NOT NULL,
+    tip_distributie TEXT DEFAULT 'N/A',
+    an_start INTEGER,
+    an_stop INTEGER,
+    FOREIGN KEY (model_id) REFERENCES modele(id) ON DELETE CASCADE,
+    UNIQUE (model_id, cod_motor)
+  )""",
+  """CREATE TABLE IF NOT EXISTS componente (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nume TEXT NOT NULL UNIQUE,
+    categorie TEXT NOT NULL,
+    descriere TEXT
+  )""",
+  """CREATE TABLE IF NOT EXISTS intervale_generice (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    combustibil TEXT NOT NULL,
+    componenta_id INTEGER NOT NULL,
+    interval_km INTEGER,
+    interval_luni INTEGER,
+    observatii TEXT,
+    FOREIGN KEY (componenta_id) REFERENCES componente(id) ON DELETE CASCADE,
+    UNIQUE (combustibil, componenta_id)
+  )""",
+  """CREATE TABLE IF NOT EXISTS intervale_mentenanta (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    motor_id INTEGER NOT NULL,
+    componenta_id INTEGER NOT NULL,
+    interval_km INTEGER,
+    interval_luni INTEGER,
+    observatii TEXT,
+    FOREIGN KEY (motor_id) REFERENCES motoare(id) ON DELETE CASCADE,
+    FOREIGN KEY (componenta_id) REFERENCES componente(id) ON DELETE CASCADE,
+    UNIQUE (motor_id, componenta_id)
+  )""",
+  // `motor_id` adăugat față de view-ul original din fișierul sursă, ca să
+  // putem filtra direct pe motorul găsit prin `cod_motor_key`.
+  """CREATE VIEW IF NOT EXISTS mentenanta_completa AS
+  SELECT
+    mt.id AS motor_id,
+    ma.nume AS marca,
+    mo.nume AS model,
+    mt.cod_motor AS cod_motor,
+    mt.denumire_comerciala,
+    mt.combustibil,
+    c.nume AS componenta,
+    c.categorie,
+    COALESCE(im.interval_km, ig.interval_km) AS interval_km,
+    COALESCE(im.interval_luni, ig.interval_luni) AS interval_luni,
+    COALESCE(im.observatii, ig.observatii, '') AS observatii,
+    CASE WHEN im.id IS NOT NULL THEN 'Specific motor' ELSE 'Regula generica' END AS sursa_regula
+  FROM motoare mt
+  JOIN modele mo ON mo.id = mt.model_id
+  JOIN marci ma ON ma.id = mo.marca_id
+  CROSS JOIN componente c
+  LEFT JOIN intervale_mentenanta im ON im.motor_id = mt.id AND im.componenta_id = c.id
+  LEFT JOIN intervale_generice ig ON ig.combustibil = mt.combustibil AND ig.componenta_id = c.id
+  WHERE im.id IS NOT NULL OR ig.id IS NOT NULL""",
+  "CREATE INDEX IF NOT EXISTS idx_modele_marca ON modele(marca_id)",
+  "CREATE INDEX IF NOT EXISTS idx_motoare_model ON motoare(model_id)",
+  "CREATE INDEX IF NOT EXISTS idx_motoare_cod_motor_key ON motoare(cod_motor_key)",
+  "CREATE INDEX IF NOT EXISTS idx_intervale_motor ON intervale_mentenanta(motor_id)",
 
-  const VehicleModelRow({
-    required this.brand,
-    required this.model,
-    this.generation,
-    required this.engineCode,
-    required this.fuelType,
-    required this.hp,
-    required this.oilCapacity,
-    required this.oilSpec,
-  });
-}
+  // ---------- Date: componente ----------
+  """INSERT INTO componente (nume, categorie, descriere) VALUES
+    ('Ulei motor + filtru ulei', 'Fluide', 'Schimb ulei motor si filtrul aferent'),
+    ('Filtru aer motor', 'Filtre', 'Filtrul de admisie aer'),
+    ('Filtru habitaclu (polen)', 'Filtre', 'Filtrul de aer din interiorul masinii'),
+    ('Filtru combustibil', 'Filtre', 'Diesel: de obicei mai des; benzina: rar sau integrat in pompa'),
+    ('Curea/lant de distributie', 'Distributie', 'Element critic; ruperea poate distruge motorul'),
+    ('Rola intinzatoare + pompa apa (kit distributie)', 'Distributie', 'Se schimba de regula odata cu cureaua de distributie'),
+    ('Curea accesorii (alternator/servo/AC)', 'Curele auxiliare', 'Curea trapezoidala/poly-V'),
+    ('Lichid de racire (antigel)', 'Fluide', 'Racire motor'),
+    ('Lichid de frana (DOT)', 'Fluide', 'Higroscopic, se schimba pe timp, nu doar pe km'),
+    ('Placute de frana fata', 'Franare', 'Uzura variabila in functie de stilul de condus'),
+    ('Placute de frana spate', 'Franare', 'Uzura variabila'),
+    ('Discuri de frana fata', 'Franare', 'De obicei se schimba la 2 seturi de placute'),
+    ('Discuri de frana spate', 'Franare', 'De obicei se schimba la 2 seturi de placute'),
+    ('Bujii (benzina)', 'Aprindere', 'Doar la motoare pe benzina'),
+    ('Bujii incandescente (diesel)', 'Aprindere', 'Doar la motoare diesel'),
+    ('Ulei cutie automata (ATF) + filtru', 'Suspensie/Transmisie', 'Cutii automate/DSG/CVT'),
+    ('Ulei cutie manuala', 'Suspensie/Transmisie', 'Cutii manuale clasice'),
+    ('Ulei diferential/punte', 'Suspensie/Transmisie', 'Tractiune integrala/spate'),
+    ('Filtru de particule (DPF/FAP) - verificare/curatare', 'Filtre', 'Diesel; verificare stare si regenerare'),
+    ('AdBlue (solutie SCR)', 'Fluide', 'Motoare diesel Euro 6 cu SCR'),
+    ('Baterie 12V', 'Altele', 'Verificare/inlocuire periodica')""",
 
-/// Un rând din `maintenance_intervals`: intervalul pentru o componentă
-/// anume, pe un cod de motor anume. `intervalMonths == 0` înseamnă "fără
-/// limită pe timp" (ex. kit distribuție la unele motorizări).
-class MaintenanceIntervalRow {
-  final String engineCode;
-  final String componentName;
-  final int? intervalKm;
-  final int? intervalMonths;
-  final String? description;
+  // ---------- Date: intervale_generice ----------
+  """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
+    ('Benzina', 1, 15000, 12, 'Uleiuri moderne sintetice; verifica cartea tehnica'),
+    ('Benzina', 2, 30000, 24, NULL),
+    ('Benzina', 3, 15000, 12, NULL),
+    ('Benzina', 7, 90000, 72, NULL),
+    ('Benzina', 8, 100000, 60, 'Multe lichide long-life; verifica specificatia'),
+    ('Benzina', 9, NULL, 24, 'Se schimba pe timp indiferent de km'),
+    ('Benzina', 10, 40000, NULL, 'Variaza mult cu stilul de condus'),
+    ('Benzina', 11, 60000, NULL, NULL),
+    ('Benzina', 12, 80000, NULL, NULL),
+    ('Benzina', 13, 100000, NULL, NULL),
+    ('Benzina', 14, 40000, NULL, 'Bujii iridiu/platina pot ajunge la 60-100k km'),
+    ('Benzina', 17, 80000, 60, NULL),
+    ('Benzina', 16, 60000, 48, NULL),
+    ('Benzina', 21, NULL, 60, 'In functie de conditii de utilizare')""",
+  """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
+    ('Diesel', 1, 15000, 12, 'Diesel moderne cu ulei long-life; unele modele 20-30k km'),
+    ('Diesel', 2, 30000, 24, NULL),
+    ('Diesel', 3, 15000, 12, NULL),
+    ('Diesel', 4, 30000, 24, 'La diesel se schimba mai des decat la benzina'),
+    ('Diesel', 7, 90000, 72, NULL),
+    ('Diesel', 8, 100000, 60, NULL),
+    ('Diesel', 9, NULL, 24, NULL),
+    ('Diesel', 10, 40000, NULL, NULL),
+    ('Diesel', 11, 60000, NULL, NULL),
+    ('Diesel', 12, 80000, NULL, NULL),
+    ('Diesel', 13, 100000, NULL, NULL),
+    ('Diesel', 15, 100000, 60, 'Se verifica si la pornire dificila pe rece'),
+    ('Diesel', 17, 80000, 60, NULL),
+    ('Diesel', 16, 60000, 48, NULL),
+    ('Diesel', 19, 120000, NULL, 'Regenerare periodica; curatare profesionala la colmatare'),
+    ('Diesel', 20, NULL, NULL, 'Completare la fiecare ~8.000-10.000 km, in functie de consum'),
+    ('Diesel', 21, NULL, 60, NULL)""",
+  """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
+    ('Hibrid', 1, 15000, 12, 'Motorul termic ruleaza mai putin, dar respecta timpul'),
+    ('Hibrid', 2, 30000, 24, NULL),
+    ('Hibrid', 3, 15000, 12, NULL),
+    ('Hibrid', 8, 100000, 60, 'Atentie: unele hibride au circuit separat pentru bateria HV'),
+    ('Hibrid', 9, NULL, 24, NULL),
+    ('Hibrid', 10, 60000, NULL, 'Franare regenerativa reduce uzura placutelor'),
+    ('Hibrid', 11, 80000, NULL, NULL),
+    ('Hibrid', 12, 100000, NULL, NULL),
+    ('Hibrid', 13, 120000, NULL, NULL),
+    ('Hibrid', 14, 60000, NULL, NULL),
+    ('Hibrid', 21, NULL, 60, NULL)""",
+  """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
+    ('Electric', 8, 100000, 60, 'Racire baterie/electronica de putere'),
+    ('Electric', 9, NULL, 24, NULL),
+    ('Electric', 10, 80000, NULL, 'Franare regenerativa reduce mult uzura'),
+    ('Electric', 11, 100000, NULL, NULL),
+    ('Electric', 12, 120000, NULL, NULL),
+    ('Electric', 13, 140000, NULL, NULL),
+    ('Electric', 3, 15000, 12, NULL),
+    ('Electric', 18, 60000, 60, 'Doar la modelele cu reductor/transmisie unica lubrifiata'),
+    ('Electric', 21, NULL, 60, 'Baterie auxiliara de bord, separata de bateria de tractiune')""",
 
-  const MaintenanceIntervalRow({
-    required this.engineCode,
-    required this.componentName,
-    this.intervalKm,
-    this.intervalMonths,
-    this.description,
-  });
-}
+  // ---------- Date: marci ----------
+  """INSERT INTO marci (nume, tara_origine) VALUES
+    ('Dacia', 'Romania'),
+    ('Volkswagen', 'Germania'),
+    ('BMW', 'Germania'),
+    ('Mercedes-Benz', 'Germania'),
+    ('Audi', 'Germania'),
+    ('Skoda', 'Cehia'),
+    ('Renault', 'Franta'),
+    ('Peugeot', 'Franta'),
+    ('Ford', 'SUA'),
+    ('Opel', 'Germania'),
+    ('Toyota', 'Japonia'),
+    ('Honda', 'Japonia'),
+    ('Hyundai', 'Coreea de Sud'),
+    ('Kia', 'Coreea de Sud'),
+    ('Volvo', 'Suedia'),
+    ('Fiat', 'Italia'),
+    ('Seat', 'Spania'),
+    ('Tesla', 'SUA')""",
+
+  // ---------- Date: modele ----------
+  """INSERT INTO modele (marca_id, nume, generatie, caroserie, an_start, an_stop) VALUES
+    (1, 'Logan', 'II', 'Sedan', 2012, 2020),
+    (1, 'Sandero', 'III', 'Hatchback', 2020, NULL),
+    (1, 'Duster', 'II', 'SUV', 2017, NULL),
+    (2, 'Golf', 'VII', 'Hatchback', 2012, 2019),
+    (2, 'Golf', 'VIII', 'Hatchback', 2019, NULL),
+    (2, 'Passat', 'B8', 'Sedan/Combi', 2014, NULL),
+    (2, 'Tiguan', 'II', 'SUV', 2016, NULL),
+    (3, 'Seria 3', 'F30', 'Sedan', 2012, 2019),
+    (3, 'Seria 3', 'G20', 'Sedan', 2019, NULL),
+    (3, 'X5', 'G05', 'SUV', 2018, NULL),
+    (4, 'Clasa C', 'W205', 'Sedan', 2014, 2021),
+    (4, 'Clasa E', 'W213', 'Sedan', 2016, NULL),
+    (4, 'GLC', 'X253', 'SUV', 2015, NULL),
+    (5, 'A4', 'B9', 'Sedan/Combi', 2015, NULL),
+    (5, 'A6', 'C8', 'Sedan/Combi', 2018, NULL),
+    (5, 'Q5', 'FY', 'SUV', 2016, NULL),
+    (6, 'Octavia', 'III', 'Sedan/Combi', 2013, 2019),
+    (6, 'Octavia', 'IV', 'Sedan/Combi', 2019, NULL),
+    (6, 'Kodiaq', 'I', 'SUV', 2016, NULL),
+    (7, 'Clio', 'V', 'Hatchback', 2019, NULL),
+    (7, 'Megane', 'IV', 'Hatchback/Combi', 2016, NULL),
+    (8, '308', 'II', 'Hatchback', 2013, 2021),
+    (8, '3008', 'II', 'SUV', 2016, NULL),
+    (9, 'Focus', 'IV', 'Hatchback/Combi', 2018, NULL),
+    (9, 'Fiesta', 'VII', 'Hatchback', 2017, NULL),
+    (9, 'Kuga', 'III', 'SUV', 2019, NULL),
+    (10, 'Astra', 'K', 'Hatchback/Combi', 2015, 2021),
+    (10, 'Corsa', 'F', 'Hatchback', 2019, NULL),
+    (11, 'Corolla', 'XII', 'Hatchback/Sedan', 2018, NULL),
+    (11, 'RAV4', 'V', 'SUV', 2018, NULL),
+    (11, 'Yaris', 'XP210', 'Hatchback', 2020, NULL),
+    (12, 'Civic', 'X', 'Hatchback/Sedan', 2016, 2021),
+    (12, 'CR-V', 'V', 'SUV', 2017, NULL),
+    (13, 'Tucson', 'NX4', 'SUV', 2020, NULL),
+    (13, 'i30', 'PD', 'Hatchback', 2016, NULL),
+    (14, 'Sportage', 'QL/NQ5', 'SUV', 2015, NULL),
+    (14, 'Ceed', 'CD', 'Hatchback', 2018, NULL),
+    (15, 'XC60', 'II', 'SUV', 2017, NULL),
+    (15, 'V60', 'II', 'Combi', 2018, NULL),
+    (16, '500', 'III', 'Hatchback', 2007, NULL),
+    (16, 'Tipo', 'I', 'Sedan/Hatchback', 2015, NULL),
+    (17, 'Leon', 'III', 'Hatchback', 2012, 2020),
+    (17, 'Ateca', 'I', 'SUV', 2016, NULL),
+    (18, 'Model 3', 'I', 'Sedan', 2017, NULL),
+    (18, 'Model Y', 'I', 'SUV', 2020, NULL)""",
+
+  // ---------- Date: motoare ----------
+  """INSERT INTO motoare (model_id, cod_motor, denumire_comerciala, capacitate_cm3, putere_cp, cilindri, combustibil, tip_distributie, an_start, an_stop) VALUES
+    (1, 'H4B 400', 'TCe 100', 999, 100, 3, 'Benzina', 'Lant', 2017, NULL),
+    (1, 'K9K 612', 'Blue dCi 95', 1461, 95, 4, 'Diesel', 'Curea', 2012, 2020),
+    (2, 'H4D 400', 'SCe 65', 999, 65, 3, 'Benzina', 'Lant', 2020, NULL),
+    (2, 'H4B 400', 'TCe 90', 999, 90, 3, 'Benzina', 'Lant', 2020, NULL),
+    (3, 'H5H 400', 'TCe 130', 1332, 130, 4, 'Benzina', 'Curea', 2017, NULL),
+    (3, 'K9K 837', 'Blue dCi 115', 1461, 115, 4, 'Diesel', 'Curea', 2017, NULL),
+    (4, 'CHHB', '1.4 TSI 125', 1395, 125, 4, 'Benzina', 'Lant', 2012, 2019),
+    (4, 'CUPA', '2.0 TDI 150', 1968, 150, 4, 'Diesel', 'Curea', 2012, 2019),
+    (5, 'DADA', '1.5 TSI 150', 1498, 150, 4, 'Benzina', 'Lant', 2019, NULL),
+    (5, 'DTVA', '2.0 TDI 150', 1968, 150, 4, 'Diesel', 'Curea', 2019, NULL),
+    (6, 'CZEA', '1.8 TSI 180', 1798, 180, 4, 'Benzina', 'Lant', 2014, NULL),
+    (6, 'DFGA', '2.0 TDI 190', 1968, 190, 4, 'Diesel', 'Curea', 2014, NULL),
+    (7, 'DADA', '1.5 TSI 150', 1498, 150, 4, 'Benzina', 'Lant', 2016, NULL),
+    (7, 'DFHA', '2.0 TDI 150', 1968, 150, 4, 'Diesel', 'Curea', 2016, NULL),
+    (8, 'N20B20', '320i', 1997, 184, 4, 'Benzina', 'Lant', 2012, 2019),
+    (8, 'N47D20', '320d', 1995, 184, 4, 'Diesel', 'Lant', 2012, 2015),
+    (8, 'B47D20', '320d', 1995, 190, 4, 'Diesel', 'Lant', 2015, 2019),
+    (9, 'B48B20', '320i', 1998, 184, 4, 'Benzina', 'Lant', 2019, NULL),
+    (9, 'B47D20', '320d', 1995, 190, 4, 'Diesel', 'Lant', 2019, NULL),
+    (10, 'B58B30', 'xDrive40i', 2998, 340, 6, 'Benzina', 'Lant', 2018, NULL),
+    (10, 'B57D30', 'xDrive30d', 2993, 265, 6, 'Diesel', 'Lant', 2018, NULL),
+    (11, 'M274', 'C200', 1991, 184, 4, 'Benzina', 'Lant', 2014, 2021),
+    (11, 'OM651', 'C220d', 2143, 170, 4, 'Diesel', 'Lant', 2014, 2018),
+    (11, 'OM654', 'C220d', 1950, 194, 4, 'Diesel', 'Lant', 2018, 2021),
+    (12, 'M274', 'E200', 1991, 184, 4, 'Benzina', 'Lant', 2016, NULL),
+    (12, 'OM654', 'E220d', 1950, 194, 4, 'Diesel', 'Lant', 2016, NULL),
+    (13, 'M274', 'GLC 200', 1991, 197, 4, 'Benzina', 'Lant', 2015, NULL),
+    (13, 'OM654', 'GLC 220d', 1950, 194, 4, 'Diesel', 'Lant', 2018, NULL),
+    (14, 'DNWA', '35 TFSI', 1395, 150, 4, 'Benzina', 'Lant', 2015, NULL),
+    (14, 'DETA', '40 TDI', 1968, 190, 4, 'Diesel', 'Curea', 2015, NULL),
+    (15, 'DAJA', '45 TFSI', 1984, 245, 4, 'Benzina', 'Lant', 2018, NULL),
+    (15, 'DTUA', '40 TDI', 1968, 204, 4, 'Diesel', 'Curea', 2018, NULL),
+    (16, 'DPCA', '40 TFSI', 1984, 190, 4, 'Benzina', 'Lant', 2016, NULL),
+    (16, 'DETA', '40 TDI', 1968, 190, 4, 'Diesel', 'Curea', 2016, NULL),
+    (17, 'CHHB', '1.4 TSI 150', 1395, 150, 4, 'Benzina', 'Lant', 2013, 2019),
+    (17, 'CLHA', '2.0 TDI 150', 1968, 150, 4, 'Diesel', 'Curea', 2013, 2019),
+    (18, 'DADA', '1.5 TSI 150', 1498, 150, 4, 'Benzina', 'Lant', 2019, NULL),
+    (18, 'DTVA', '2.0 TDI 150', 1968, 150, 4, 'Diesel', 'Curea', 2019, NULL),
+    (19, 'DADA', '1.5 TSI 150', 1498, 150, 4, 'Benzina', 'Lant', 2016, NULL),
+    (19, 'DFHA', '2.0 TDI 150', 1968, 150, 4, 'Diesel', 'Curea', 2016, NULL),
+    (20, 'H4D 400', 'SCe 75', 999, 75, 3, 'Benzina', 'Lant', 2019, NULL),
+    (20, 'H4B 400', 'TCe 100', 999, 100, 3, 'Benzina', 'Lant', 2019, NULL),
+    (20, 'K9K 637', 'Blue dCi 100', 1461, 100, 4, 'Diesel', 'Curea', 2019, NULL),
+    (21, 'H5H 450', 'TCe 140', 1332, 140, 4, 'Benzina', 'Curea', 2016, NULL),
+    (21, 'K9K 646', 'Blue dCi 115', 1461, 115, 4, 'Diesel', 'Curea', 2016, NULL),
+    (22, 'EP6FADM', 'PureTech 130', 1199, 130, 3, 'Benzina', 'Curea', 2013, 2021),
+    (22, 'DV5RC', 'BlueHDi 130', 1560, 130, 4, 'Diesel', 'Curea', 2013, 2021),
+    (23, 'EP6FADM', 'PureTech 130', 1199, 130, 3, 'Benzina', 'Curea', 2016, NULL),
+    (23, 'DW10FC', 'BlueHDi 130', 1997, 130, 4, 'Diesel', 'Curea', 2016, NULL),
+    (24, 'M8DB', 'EcoBoost 125', 998, 125, 3, 'Benzina', 'Curea', 2018, NULL),
+    (24, 'MHBA', 'EcoBlue 120', 1499, 120, 4, 'Diesel', 'Curea', 2018, NULL),
+    (25, 'M2DA', 'EcoBoost 100', 998, 100, 3, 'Benzina', 'Curea', 2017, NULL),
+    (26, 'M2DA', 'EcoBoost 150', 1499, 150, 3, 'Benzina', 'Curea', 2019, NULL),
+    (26, 'MHBA', 'EcoBlue 150', 1997, 150, 4, 'Diesel', 'Curea', 2019, NULL),
+    (27, 'B14XFT', '1.4 Turbo 125', 1399, 125, 4, 'Benzina', 'Lant', 2015, 2021),
+    (27, 'B16DTH', '1.6 CDTI 136', 1598, 136, 4, 'Diesel', 'Curea', 2015, 2021),
+    (28, 'HN01', 'PureTech/1.2 Turbo 100', 1199, 100, 3, 'Benzina', 'Curea', 2019, NULL),
+    (29, 'M15A-FKS', '1.2 Turbo', 1198, 116, 4, 'Benzina', 'Lant', 2018, NULL),
+    (29, '2ZR-FXE', 'Hybrid 1.8', 1798, 122, 4, 'Hibrid', 'Lant', 2018, NULL),
+    (30, 'A25A-FXS', 'Hybrid 2.5', 2487, 218, 4, 'Hibrid', 'Lant', 2018, NULL),
+    (31, 'M15A-FKS', '1.5 Dynamic Force', 1490, 125, 3, 'Benzina', 'Lant', 2020, NULL),
+    (31, '2NR-VEX', 'Hybrid 1.5', 1490, 116, 3, 'Hibrid', 'Lant', 2020, NULL),
+    (32, 'L15B7', '1.0 VTEC Turbo', 988, 129, 3, 'Benzina', 'Curea', 2016, 2021),
+    (32, 'K10C1', '1.6 i-DTEC', 1597, 120, 4, 'Diesel', 'Lant', 2016, 2019),
+    (33, 'L15BE', '1.5 VTEC Turbo', 1498, 173, 4, 'Benzina', 'Curea', 2017, NULL),
+    (34, 'G4FJ', '1.6 T-GDI', 1591, 150, 4, 'Benzina', 'Lant', 2020, NULL),
+    (34, 'D4HA', '2.0 CRDi', 1995, 185, 4, 'Diesel', 'Curea', 2020, NULL),
+    (35, 'G4FJ', '1.4 T-GDI', 1353, 140, 4, 'Benzina', 'Lant', 2016, NULL),
+    (36, 'G4FJ', '1.6 T-GDI', 1591, 150, 4, 'Benzina', 'Lant', 2015, NULL),
+    (36, 'D4HA', '2.0 CRDi', 1995, 185, 4, 'Diesel', 'Curea', 2015, NULL),
+    (37, 'G4FJ', '1.4 T-GDI', 1353, 140, 4, 'Benzina', 'Lant', 2018, NULL),
+    (38, 'B4204T', 'T5', 1969, 250, 4, 'Benzina', 'Lant', 2017, NULL),
+    (38, 'D4204T', 'D4', 1969, 190, 4, 'Diesel', 'Curea', 2017, NULL),
+    (39, 'B4204T', 'T4', 1969, 190, 4, 'Benzina', 'Lant', 2018, NULL),
+    (39, 'D4204T', 'D3', 1969, 150, 4, 'Diesel', 'Curea', 2018, NULL),
+    (40, '169A4.000', '1.2 8V', 1242, 69, 4, 'Benzina', 'Curea', 2007, NULL),
+    (40, '312A2.000', 'TwinAir 85', 875, 85, 2, 'Benzina', 'Curea', 2010, NULL),
+    (41, '199B4.000', '1.4 16V', 1368, 95, 4, 'Benzina', 'Curea', 2015, NULL),
+    (41, '199A9.000', '1.6 MultiJet', 1598, 120, 4, 'Diesel', 'Curea', 2015, NULL),
+    (42, 'CHHB', '1.4 TSI 125', 1395, 125, 4, 'Benzina', 'Lant', 2012, 2020),
+    (42, 'CLHA', '2.0 TDI 150', 1968, 150, 4, 'Diesel', 'Curea', 2012, 2020),
+    (43, 'DADA', '1.5 TSI 150', 1498, 150, 4, 'Benzina', 'Lant', 2016, NULL),
+    (43, 'DFHA', '2.0 TDI 150', 1968, 150, 4, 'Diesel', 'Curea', 2016, NULL),
+    (44, 'RWD', 'Standard Range RWD', 0, 283, 0, 'Electric', 'N/A', 2017, NULL),
+    (44, 'AWD-DM', 'Long Range AWD', 0, 366, 0, 'Electric', 'N/A', 2017, NULL),
+    (45, 'RWD', 'Standard Range RWD', 0, 299, 0, 'Electric', 'N/A', 2020, NULL),
+    (45, 'AWD-DM', 'Long Range AWD', 0, 384, 0, 'Electric', 'N/A', 2020, NULL)""",
+  // completează cheia normalizată de căutare (majuscule, fără spații/liniuțe/puncte) —
+  // aceeași normalizare ca `normalizeEngineCode` din acest fișier.
+  """UPDATE motoare SET cod_motor_key =
+    UPPER(REPLACE(REPLACE(REPLACE(cod_motor, ' ', ''), '-', ''), '.', ''))""",
+
+  // ---------- Date: intervale_mentenanta ----------
+  // Reguli SPECIFICE per motor — mai ales distribuție (curea/lanț), unde
+  // intervalul variază enorm între motoare și e critic să nu se generalizeze
+  // (exact motivul pentru care catalogul anterior evita complet componenta
+  // asta). Restul componentelor moștenesc regula generică pe combustibil.
+  """INSERT INTO intervale_mentenanta (motor_id, componenta_id, interval_km, interval_luni, observatii) VALUES
+    (1, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (2, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (2, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (3, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (4, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (5, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (5, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (6, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (6, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (7, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (8, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (8, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (9, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (10, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (10, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (11, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (12, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (12, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (13, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (14, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (14, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (15, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (16, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (17, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (18, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (19, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (20, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (21, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (22, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (23, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (24, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (25, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (26, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (27, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (28, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (29, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (30, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (30, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (31, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (32, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (32, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (33, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (34, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (34, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (35, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (36, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (36, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (37, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (38, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (38, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (39, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (40, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (40, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (41, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (42, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (43, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (43, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (44, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (44, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (45, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (45, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (46, 5, 200000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (46, 6, 200000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (47, 5, 200000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (47, 6, 200000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (48, 5, 200000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (48, 6, 200000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (49, 5, 200000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (49, 6, 200000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (50, 5, 240000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (50, 6, 240000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (51, 5, 240000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (51, 6, 240000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (52, 5, 240000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (52, 6, 240000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (53, 5, 240000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (53, 6, 240000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (54, 5, 240000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (54, 6, 240000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (55, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (56, 5, 240000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (56, 6, 240000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (57, 5, 200000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (57, 6, 200000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (58, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (59, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (60, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (61, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (62, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (63, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (63, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (64, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (65, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (65, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (66, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (67, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (67, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (68, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (69, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (70, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (70, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (71, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (72, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (73, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (73, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (74, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (75, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (75, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (76, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (76, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (77, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (77, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (78, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (78, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (79, 5, 160000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (79, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (80, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (81, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (81, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    (82, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
+    (83, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
+    (83, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie')""",
+];
 
 /// Normalizează un cod de motor (majuscule, fără spații/liniuțe/puncte) —
-/// folosit atât la seed cât și la interogare, ca "K9K 872" introdus de
-/// utilizator să găsească rândul stocat ca "K9K 872".
+/// aceeași regulă ca `UPDATE motoare SET cod_motor_key = ...` de mai sus, ca
+/// să se potrivească indiferent cum a fost introdus ("K9K 872", "k9k-872"...).
 String normalizeEngineCode(String engineCode) {
   return engineCode.trim().toUpperCase().replaceAll(RegExp(r'[\s\-.]'), '');
 }
-
-const List<VehicleModelRow> vehicleModelRows = [
-  // Hyundai / Kia
-  VehicleModelRow(brand: 'Hyundai', model: 'Tucson', generation: 'TL (2015-2020)', engineCode: 'D4HA', fuelType: 'Diesel', hp: 184, oilCapacity: 7.6, oilSpec: 'ACEA C3 5W-30'),
-  VehicleModelRow(brand: 'Hyundai', model: 'Tucson', generation: 'NX4 (2020+)', engineCode: 'D4FE', fuelType: 'Diesel', hp: 136, oilCapacity: 5.4, oilSpec: 'ACEA C5 0W-30'),
-  VehicleModelRow(brand: 'Hyundai', model: 'i30', generation: 'PDE (2017-2024)', engineCode: 'G3LC', fuelType: 'Petrol', hp: 120, oilCapacity: 3.8, oilSpec: 'API SN 0W-20'),
-  VehicleModelRow(brand: 'Kia', model: 'Sportage', generation: 'QL (2016-2021)', engineCode: 'D4HA', fuelType: 'Diesel', hp: 185, oilCapacity: 7.6, oilSpec: 'ACEA C3 5W-30'),
-  VehicleModelRow(brand: 'Kia', model: 'Ceed', generation: 'CD (2018+)', engineCode: 'G4LD', fuelType: 'Petrol', hp: 140, oilCapacity: 4.2, oilSpec: 'API SN 0W-30'),
-
-  // Volkswagen / Skoda / Audi / Seat
-  VehicleModelRow(brand: 'Volkswagen', model: 'Golf VII', generation: 'Mk7 (2012-2020)', engineCode: 'CRLB', fuelType: 'Diesel', hp: 150, oilCapacity: 4.7, oilSpec: 'VW 507 00 5W-30'),
-  VehicleModelRow(brand: 'Volkswagen', model: 'Golf VII', generation: 'Mk7 (2012-2020)', engineCode: 'CHPA', fuelType: 'Petrol', hp: 140, oilCapacity: 4.0, oilSpec: 'VW 504 00 5W-30'),
-  VehicleModelRow(brand: 'Volkswagen', model: 'Passat B8', generation: 'B8 (2014-2023)', engineCode: 'DFCA', fuelType: 'Diesel', hp: 150, oilCapacity: 4.7, oilSpec: 'VW 507 00 5W-30'),
-  VehicleModelRow(brand: 'Volkswagen', model: 'Tiguan', generation: 'AD1 (2016-2024)', engineCode: 'DFHA', fuelType: 'Diesel', hp: 190, oilCapacity: 5.5, oilSpec: 'VW 507 00 5W-30'),
-  VehicleModelRow(brand: 'Skoda', model: 'Octavia', generation: 'Mk3 (2013-2020)', engineCode: 'CRLB', fuelType: 'Diesel', hp: 150, oilCapacity: 4.7, oilSpec: 'VW 507 00 5W-30'),
-  VehicleModelRow(brand: 'Skoda', model: 'Octavia', generation: 'Mk4 (2020+)', engineCode: 'DTSB', fuelType: 'Diesel', hp: 150, oilCapacity: 4.7, oilSpec: 'VW 507 00 5W-30'),
-  VehicleModelRow(brand: 'Skoda', model: 'Superb', generation: '3V (2015-2024)', engineCode: 'DFCA', fuelType: 'Diesel', hp: 150, oilCapacity: 4.7, oilSpec: 'VW 507 00 5W-30'),
-  VehicleModelRow(brand: 'Audi', model: 'A4', generation: 'B9 (2015-2023)', engineCode: 'DEUA', fuelType: 'Diesel', hp: 150, oilCapacity: 5.0, oilSpec: 'VW 507 00 5W-30'),
-  VehicleModelRow(brand: 'Audi', model: 'A6', generation: 'C8 (2018+)', engineCode: 'DFBA', fuelType: 'Diesel', hp: 204, oilCapacity: 6.1, oilSpec: 'VW 507 00 5W-30'),
-  VehicleModelRow(brand: 'Seat', model: 'Leon', generation: '5F (2012-2020)', engineCode: 'CRLB', fuelType: 'Diesel', hp: 150, oilCapacity: 4.7, oilSpec: 'VW 507 00 5W-30'),
-
-  // Dacia / Renault
-  VehicleModelRow(brand: 'Dacia', model: 'Duster', generation: 'Duster II (2018-2024)', engineCode: 'K9K 872', fuelType: 'Diesel', hp: 115, oilCapacity: 4.8, oilSpec: 'RN17 5W-30'),
-  VehicleModelRow(brand: 'Dacia', model: 'Duster', generation: 'Duster II (2018-2024)', engineCode: 'H5H', fuelType: 'Petrol', hp: 130, oilCapacity: 5.1, oilSpec: 'RN17 5W-30'),
-  VehicleModelRow(brand: 'Dacia', model: 'Logan', generation: 'Logan III (2021+)', engineCode: 'H4D', fuelType: 'Petrol', hp: 90, oilCapacity: 4.1, oilSpec: 'RN17 0W-20'),
-  VehicleModelRow(brand: 'Renault', model: 'Megane', generation: 'IV (2016-2024)', engineCode: 'K9K 646', fuelType: 'Diesel', hp: 110, oilCapacity: 4.5, oilSpec: 'RN0720 5W-30'),
-  VehicleModelRow(brand: 'Renault', model: 'Kadjar', generation: 'HA (2015-2022)', engineCode: 'R9M', fuelType: 'Diesel', hp: 130, oilCapacity: 6.0, oilSpec: 'RN0720 5W-30'),
-
-  // BMW
-  VehicleModelRow(brand: 'BMW', model: '3er', generation: 'F30 (2012-2019)', engineCode: 'N47D20O1', fuelType: 'Diesel', hp: 184, oilCapacity: 5.2, oilSpec: 'BMW Longlife-04 5W-30'),
-  VehicleModelRow(brand: 'BMW', model: '3er', generation: 'F30 LCI (2015-2019)', engineCode: 'B47D20', fuelType: 'Diesel', hp: 190, oilCapacity: 5.5, oilSpec: 'BMW Longlife-04 5W-30'),
-  VehicleModelRow(brand: 'BMW', model: '5er', generation: 'G30 (2017-2023)', engineCode: 'B57D30A', fuelType: 'Diesel', hp: 265, oilCapacity: 6.5, oilSpec: 'BMW Longlife-04 5W-30'),
-  VehicleModelRow(brand: 'BMW', model: 'X3', generation: 'F25 (2010-2017)', engineCode: 'N47D20', fuelType: 'Diesel', hp: 184, oilCapacity: 5.2, oilSpec: 'BMW Longlife-04 5W-30'),
-
-  // Mercedes-Benz
-  VehicleModelRow(brand: 'Mercedes-Benz', model: 'C-Class', generation: 'W205 (2014-2021)', engineCode: 'OM651', fuelType: 'Diesel', hp: 170, oilCapacity: 6.5, oilSpec: 'MB 229.51 5W-30'),
-  VehicleModelRow(brand: 'Mercedes-Benz', model: 'C-Class', generation: 'W205 LCI (2018-2021)', engineCode: 'OM654', fuelType: 'Diesel', hp: 194, oilCapacity: 6.3, oilSpec: 'MB 229.52 5W-30'),
-  VehicleModelRow(brand: 'Mercedes-Benz', model: 'E-Class', generation: 'W213 (2016-2023)', engineCode: 'OM654', fuelType: 'Diesel', hp: 194, oilCapacity: 6.3, oilSpec: 'MB 229.52 5W-30'),
-  VehicleModelRow(brand: 'Mercedes-Benz', model: 'GLC', generation: 'X253 (2015-2022)', engineCode: 'OM651', fuelType: 'Diesel', hp: 170, oilCapacity: 6.5, oilSpec: 'MB 229.51 5W-30'),
-
-  // Ford & Toyota
-  VehicleModelRow(brand: 'Ford', model: 'Focus', generation: 'Mk3 (2011-2018)', engineCode: 'T3DA', fuelType: 'Diesel', hp: 95, oilCapacity: 4.1, oilSpec: 'WSS-M2C950-A 0W-30'),
-  VehicleModelRow(brand: 'Ford', model: 'Focus', generation: 'Mk4 (2018-2024)', engineCode: 'YZDA', fuelType: 'Petrol', hp: 150, oilCapacity: 5.1, oilSpec: 'WSS-M2C948-B 5W-20'),
-  VehicleModelRow(brand: 'Ford', model: 'Kuga', generation: 'Mk2 (2013-2019)', engineCode: 'T7MA', fuelType: 'Diesel', hp: 150, oilCapacity: 6.1, oilSpec: 'WSS-M2C950-A 0W-30'),
-  VehicleModelRow(brand: 'Toyota', model: 'Corolla', generation: 'E210 (2019+)', engineCode: 'M20A-FXS', fuelType: 'Hybrid', hp: 184, oilCapacity: 4.3, oilSpec: 'API SP 0W-16'),
-  VehicleModelRow(brand: 'Toyota', model: 'RAV4', generation: 'XA50 (2019+)', engineCode: 'A25A-FXS', fuelType: 'Hybrid', hp: 222, oilCapacity: 4.5, oilSpec: 'API SP 0W-16'),
-];
-
-const List<MaintenanceIntervalRow> maintenanceIntervalRows = [
-  MaintenanceIntervalRow(engineCode: 'D4HA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Regim sever România'),
-  MaintenanceIntervalRow(engineCode: 'D4HA', componentName: 'Filtru combustibil', intervalKm: 30000, intervalMonths: 24, description: 'Motorină'),
-  MaintenanceIntervalRow(engineCode: 'D4FE', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Regim sever'),
-  MaintenanceIntervalRow(engineCode: 'G3LC', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Benzină T-GDI'),
-  MaintenanceIntervalRow(engineCode: 'CRLB', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Regim sever TDI'),
-  MaintenanceIntervalRow(engineCode: 'CRLB', componentName: 'Kit distribuție (Curea + Pompă)', intervalKm: 210000, intervalMonths: 0, description: 'Limită producător'),
-  MaintenanceIntervalRow(engineCode: 'CHPA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Benzină TSI'),
-  MaintenanceIntervalRow(engineCode: 'DFCA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Regim sever'),
-  MaintenanceIntervalRow(engineCode: 'DFHA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Tiguan 2.0 TDI'),
-  MaintenanceIntervalRow(engineCode: 'DTSB', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Octavia 4 2.0 TDI'),
-  MaintenanceIntervalRow(engineCode: 'DEUA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Audi A4 B9'),
-  MaintenanceIntervalRow(engineCode: 'DFBA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Audi A6 C8'),
-  MaintenanceIntervalRow(engineCode: 'K9K 872', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Dacia Duster dCi'),
-  MaintenanceIntervalRow(engineCode: 'K9K 872', componentName: 'Kit distribuție', intervalKm: 150000, intervalMonths: 72, description: 'Curea și role'),
-  MaintenanceIntervalRow(engineCode: 'H5H', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Duster TCe'),
-  MaintenanceIntervalRow(engineCode: 'H4D', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Logan 1.0 TCe'),
-  MaintenanceIntervalRow(engineCode: 'K9K 646', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Renault Megane dCi'),
-  MaintenanceIntervalRow(engineCode: 'R9M', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Renault Kadjar dCi'),
-  MaintenanceIntervalRow(engineCode: 'N47D20O1', componentName: 'Ulei motor și filtru', intervalKm: 12000, intervalMonths: 12, description: 'Recomandat preventiv lanț'),
-  MaintenanceIntervalRow(engineCode: 'B47D20', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'BMW B47'),
-  MaintenanceIntervalRow(engineCode: 'B57D30A', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'BMW 3.0d'),
-  MaintenanceIntervalRow(engineCode: 'OM651', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Mercedes OM651'),
-  MaintenanceIntervalRow(engineCode: 'OM654', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Mercedes OM654'),
-  MaintenanceIntervalRow(engineCode: 'T3DA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Ford Focus 1.5 TDCi'),
-  MaintenanceIntervalRow(engineCode: 'YZDA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Ford Focus 1.5 EcoBoost'),
-  MaintenanceIntervalRow(engineCode: 'T7MA', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Ford Kuga 2.0 TDCi'),
-  MaintenanceIntervalRow(engineCode: 'M20A-FXS', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Toyota Hybrid 2.0'),
-  MaintenanceIntervalRow(engineCode: 'A25A-FXS', componentName: 'Ulei motor și filtru', intervalKm: 15000, intervalMonths: 12, description: 'Toyota RAV4 Hybrid'),
-];

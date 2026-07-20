@@ -116,32 +116,70 @@ class _InfoTab extends StatelessWidget {
   const _InfoTab({required this.vehicle, required this.onChanged});
 
   /// Componenta (componentele) din tabul Componente pe care se aplică un
-  /// rând `maintenance_intervals.component_name`. Potrivire pe prefix, ca să
-  /// tolereze variații ("Kit distribuție" vs "Kit distribuție (Curea + Pompă)").
+  /// rând `componenta` din view-ul `mentenanta_completa` — potrivire EXACTĂ
+  /// pe numele din `vehicle_reference_data.dart` (nu pe prefix, fiindcă acum
+  /// numele sunt fixe, nu variază per marcă). Câteva componente din setul de
+  /// date (ulei diferențial, DPF, AdBlue) nu au încă un id în tracker —
+  /// întorc listă goală și rândul e pur și simplu ignorat.
   static List<String> _componentIdsForName(String componentName) {
-    if (componentName.startsWith('Ulei motor')) return const ['engine_oil', 'oil_filter'];
-    if (componentName.startsWith('Filtru combustibil')) return const ['fuel_filter'];
-    if (componentName.startsWith('Kit distribuție')) return const ['timing_belt'];
-    return const [];
+    switch (componentName) {
+      case 'Ulei motor + filtru ulei':
+        return const ['engine_oil', 'oil_filter'];
+      case 'Filtru aer motor':
+        return const ['air_filter'];
+      case 'Filtru habitaclu (polen)':
+        return const ['cabin_filter'];
+      case 'Filtru combustibil':
+        return const ['fuel_filter'];
+      case 'Curea/lant de distributie':
+      case 'Rola intinzatoare + pompa apa (kit distributie)':
+        return const ['timing_belt'];
+      case 'Curea accesorii (alternator/servo/AC)':
+        return const ['accessory_belt'];
+      case 'Lichid de racire (antigel)':
+        return const ['coolant'];
+      case 'Lichid de frana (DOT)':
+        return const ['brake_fluid'];
+      case 'Placute de frana fata':
+        return const ['brake_pads_front'];
+      case 'Placute de frana spate':
+        return const ['brake_pads_rear'];
+      case 'Discuri de frana fata':
+      case 'Discuri de frana spate':
+        return const ['brake_discs'];
+      case 'Bujii (benzina)':
+        return const ['spark_plugs'];
+      case 'Bujii incandescente (diesel)':
+        return const ['glow_plugs'];
+      case 'Ulei cutie automata (ATF) + filtru':
+      case 'Ulei cutie manuala':
+        return const ['transmission_fluid'];
+      case 'Baterie 12V':
+        return const ['battery'];
+      default:
+        return const [];
+    }
   }
 
-  static String _engineDisplayName(Map<String, Object?>? model, String engineCode) {
-    if (model == null) return engineCode;
-    final parts = [model['brand'], model['model'], model['generation']]
+  static String _engineDisplayName(Map<String, Object?> engine) {
+    final parts = [engine['marca_nume'], engine['model_nume'], engine['model_generatie']]
         .whereType<String>()
-        .where((s) => s.isNotEmpty);
-    return '${parts.join(' ')} ($engineCode)';
+        .where((s) => s.isNotEmpty)
+        .join(' ');
+    final comercial = engine['denumire_comerciala'] as String?;
+    final label = comercial?.isNotEmpty == true ? '$parts — $comercial' : parts;
+    return '$label (${engine['cod_motor']})';
   }
 
   Future<void> _applyMaintenanceProfile(BuildContext context) async {
     final db = DatabaseHelper.instance;
     final label = '${vehicle.make} ${vehicle.model}'.trim();
 
-    final engineRows = await db.getMaintenanceIntervalsForEngineCode(vehicle.engineCode);
-    final engineModel =
-        engineRows.isNotEmpty ? await db.getVehicleModelForEngineCode(vehicle.engineCode) : null;
-    final engineDisplayName =
-        engineRows.isNotEmpty ? _engineDisplayName(engineModel, vehicle.engineCode!) : null;
+    final engine = await db.getEngineForCode(vehicle.engineCode);
+    final engineRows = engine != null
+        ? await db.getMaintenanceIntervalsForMotorId(engine['id'] as int)
+        : <Map<String, Object?>>[];
+    final engineDisplayName = engine != null ? _engineDisplayName(engine) : null;
 
     final fallbackProfile = engineRows.isEmpty
         ? resolveMaintenanceProfile(make: vehicle.make, model: vehicle.model, year: vehicle.year)
@@ -156,7 +194,7 @@ class _InfoTab extends StatelessWidget {
           engineRows.isNotEmpty
               ? S.applyMaintenanceProfileBodyEngine(
                   engineDisplayName!,
-                  engineRows.map((r) => r['component_name'] as String).toSet().join(', '),
+                  engineRows.map((r) => r['componenta'] as String).toSet().join(', '),
                 )
               : fallbackProfile != null
                   ? S.applyMaintenanceProfileBody(fallbackProfile.displayName)
@@ -172,26 +210,28 @@ class _InfoTab extends StatelessWidget {
 
     final existingRecords = await db.getComponentRecords(vehicle.id);
     final recordsById = {for (final r in existingRecords) r.componentId: r};
+    final existingExtras = await db.getExtraComponentIds(vehicle.id);
     var updatedCount = 0;
     var addedCount = 0;
 
     if (engineRows.isNotEmpty) {
       for (final row in engineRows) {
-        final months = (row['interval_months'] as int?) == 0 ? null : row['interval_months'] as int?;
-        for (final componentId in _componentIdsForName(row['component_name'] as String)) {
-          final existing = recordsById[componentId];
-          var notes = existing?.notes;
-          if (componentId == 'engine_oil' && (notes == null || notes.isEmpty) && engineModel != null) {
-            notes = '${engineModel['oil_spec']}, ${engineModel['oil_capacity']} L';
+        for (final componentId in _componentIdsForName(row['componenta'] as String)) {
+          if (!essentialComponents.any((d) => d.id == componentId) &&
+              !existingExtras.contains(componentId)) {
+            await db.addExtraComponent(vehicle.id, componentId);
+            existingExtras.add(componentId);
+            addedCount++;
           }
+          final existing = recordsById[componentId];
           await db.upsertComponentRecord(ComponentRecord(
             vehicleId: vehicle.id,
             componentId: componentId,
             lastChangedDate: existing?.lastChangedDate,
             lastChangedMileage: existing?.lastChangedMileage,
-            notes: notes,
+            notes: existing?.notes,
             customIntervalKm: row['interval_km'] as int?,
-            customIntervalMonths: months,
+            customIntervalMonths: row['interval_luni'] as int?,
             customIntervalSource: engineDisplayName,
           ));
           updatedCount++;
@@ -214,7 +254,6 @@ class _InfoTab extends StatelessWidget {
       }
     }
 
-    final existingExtras = await db.getExtraComponentIds(vehicle.id);
     for (final extraId in universalExtraComponentIds) {
       if (!existingExtras.contains(extraId)) {
         await db.addExtraComponent(vehicle.id, extraId);

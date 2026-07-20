@@ -77,6 +77,7 @@ class ComponentDefinition {
     'tires': ['Anvelope', 'Tires'],
     'transmission_fluid': ['Ulei cutie de viteze', 'Transmission fluid'],
     'wiper_blades': ['Ștergătoare parbriz', 'Wiper blades'],
+    'glow_plugs': ['Bujii incandescente', 'Glow plugs'],
   };
 }
 
@@ -104,6 +105,7 @@ const List<ComponentDefinition> essentialComponents = [
 const List<ComponentDefinition> extraComponentCatalog = [
   ComponentDefinition(id: 'transmission_fluid', intervalKm: 60000, intervalMonths: 60),
   ComponentDefinition(id: 'wiper_blades', intervalMonths: 12),
+  ComponentDefinition(id: 'glow_plugs', intervalKm: 100000, intervalMonths: 60),
 ];
 
 /// Caută o definiție de componentă (esențială sau suplimentară) după id.

@@ -24,7 +24,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'car_planner.db');
     return openDatabase(
       path,
-      version: 6,
+      version: 7,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -48,82 +48,37 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE vehicles ADD COLUMN engineCode TEXT');
     }
     if (oldVersion < 6) {
-      await _createReferenceDataTables(db);
+      // v6 a introdus un prim set de tabele de catalog (vehicle_models/
+      // maintenance_intervals); v7 le-a înlocuit complet cu schema
+      // relațională de mai jos — dacă cineva a apucat să treacă prin v6,
+      // le ștergem aici ca să nu rămână tabele orfane nefolosite.
+      await db.execute('DROP TABLE IF EXISTS vehicle_models');
+      await db.execute('DROP TABLE IF EXISTS maintenance_intervals');
+    }
+    if (oldVersion < 7) {
+      await db.execute('DROP TABLE IF EXISTS vehicle_models');
+      await db.execute('DROP TABLE IF EXISTS maintenance_intervals');
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
       await _seedReferenceData(db);
     }
   }
 
-  /// Tabele de catalog (nu de utilizator) — date pe cod motor introduse de
-  /// utilizator (sursă declarată: Autodata), vezi `vehicle_reference_data.dart`.
-  /// `engine_code_key` e o coloană calculată (cod motor normalizat: majuscule,
-  /// fără spații/liniuțe/puncte) folosită la interogare, ca "K9K 872" scris în
-  /// orice format să găsească rândul corect.
-  Future<void> _createReferenceDataTables(Database db) async {
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS vehicle_models (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        brand TEXT NOT NULL,
-        model TEXT NOT NULL,
-        generation TEXT,
-        engine_code TEXT NOT NULL,
-        engine_code_key TEXT NOT NULL,
-        fuel_type TEXT NOT NULL,
-        hp INTEGER NOT NULL,
-        oil_capacity REAL NOT NULL,
-        oil_spec TEXT NOT NULL
-      )
-    ''');
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_vehicle_models_engine_code_key ON vehicle_models (engine_code_key)',
-    );
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS maintenance_intervals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        engine_code TEXT NOT NULL,
-        engine_code_key TEXT NOT NULL,
-        component_name TEXT NOT NULL,
-        interval_km INTEGER,
-        interval_months INTEGER,
-        description TEXT
-      )
-    ''');
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_maintenance_intervals_engine_code_key ON maintenance_intervals (engine_code_key)',
-    );
-  }
-
-  /// Date de catalog, nu date de utilizator — sigur de golit și reintrodus
-  /// integral la fiecare bump de versiune (nu se pierde nimic din ce a
-  /// introdus utilizatorul pe mașinile lui, doar catalogul de referință).
+  /// Tabele de catalog (nu de utilizator) — schema relațională
+  /// marci→modele→motoare cu intervale de mentenanță, portată din SQL
+  /// furnizat de utilizator (sursă declarată). Vezi
+  /// `lib/utils/vehicle_reference_data.dart` pentru schema completă și
+  /// datele în sine — sigur de recreat integral la fiecare bump de versiune
+  /// (sunt date de catalog, nu date introduse de utilizator pe mașinile lui).
   Future<void> _seedReferenceData(Database db) async {
-    await db.delete('vehicle_models');
-    await db.delete('maintenance_intervals');
-
-    final batch = db.batch();
-    for (final row in vehicleModelRows) {
-      batch.insert('vehicle_models', {
-        'brand': row.brand,
-        'model': row.model,
-        'generation': row.generation,
-        'engine_code': row.engineCode,
-        'engine_code_key': normalizeEngineCode(row.engineCode),
-        'fuel_type': row.fuelType,
-        'hp': row.hp,
-        'oil_capacity': row.oilCapacity,
-        'oil_spec': row.oilSpec,
-      });
+    for (final statement in referenceDataStatements) {
+      await db.execute(statement);
     }
-    for (final row in maintenanceIntervalRows) {
-      batch.insert('maintenance_intervals', {
-        'engine_code': row.engineCode,
-        'engine_code_key': normalizeEngineCode(row.engineCode),
-        'component_name': row.componentName,
-        'interval_km': row.intervalKm,
-        'interval_months': row.intervalMonths,
-        'description': row.description,
-      });
-    }
-    await batch.commit(noResult: true);
   }
 
   Future<void> _createVehicleExtraComponentsTable(Database db) async {
@@ -233,7 +188,6 @@ class DatabaseHelper {
     await db.execute('ALTER TABLE component_records ADD COLUMN customIntervalMonths INTEGER');
     await db.execute('ALTER TABLE component_records ADD COLUMN customIntervalSource TEXT');
     await _createVehicleExtraComponentsTable(db);
-    await _createReferenceDataTables(db);
     await _seedReferenceData(db);
   }
 
@@ -450,33 +404,34 @@ class DatabaseHelper {
     return rows.map((r) => r['componentId'] as String).toSet();
   }
 
-  // ---------- Reference data (cod motor → intervale/model) ----------
+  // ---------- Reference data (cod motor → marcă/model/motor/intervale) ----------
 
-  /// Toate rândurile de interval găsite pentru [engineCode] (poate fi mai
-  /// multe — ulei, filtru combustibil, kit distribuție etc.). Listă goală
-  /// dacă [engineCode] e null/gol sau nu are nicio potrivire.
-  Future<List<Map<String, Object?>>> getMaintenanceIntervalsForEngineCode(String? engineCode) async {
-    if (engineCode == null) return [];
-    final key = normalizeEngineCode(engineCode);
-    if (key.isEmpty) return [];
-    final db = await database;
-    return db.query('maintenance_intervals', where: 'engine_code_key = ?', whereArgs: [key]);
-  }
-
-  /// Primul vehicul de referință care folosește [engineCode] — folosit doar
-  /// pentru afișare (marcă/model/generație, spec ulei), nu pentru intervale
-  /// (acelea vin din `getMaintenanceIntervalsForEngineCode`).
-  Future<Map<String, Object?>?> getVehicleModelForEngineCode(String? engineCode) async {
+  /// Primul motor de referință care folosește [engineCode] (poate exista mai
+  /// mult de unul — același cod scurt apare uneori la mărci/modele diferite
+  /// cu specificații ușor diferite; luăm primul, e doar pentru afișare și
+  /// pentru a rezolva intervalele lui). `null` dacă nu are nicio potrivire.
+  Future<Map<String, Object?>?> getEngineForCode(String? engineCode) async {
     if (engineCode == null) return null;
     final key = normalizeEngineCode(engineCode);
     if (key.isEmpty) return null;
     final db = await database;
-    final rows = await db.query(
-      'vehicle_models',
-      where: 'engine_code_key = ?',
-      whereArgs: [key],
-      limit: 1,
-    );
+    final rows = await db.rawQuery('''
+      SELECT mt.*, mo.nume AS model_nume, mo.generatie AS model_generatie, ma.nume AS marca_nume
+      FROM motoare mt
+      JOIN modele mo ON mo.id = mt.model_id
+      JOIN marci ma ON ma.id = mo.marca_id
+      WHERE mt.cod_motor_key = ?
+      ORDER BY mt.id
+      LIMIT 1
+    ''', [key]);
     return rows.isEmpty ? null : rows.first;
+  }
+
+  /// Toate rândurile din view-ul `mentenanta_completa` pentru motorul
+  /// [motorId] — combină automat regula specifică motorului (mai ales
+  /// distribuție) cu fallback-ul generic pe combustibil pentru rest.
+  Future<List<Map<String, Object?>>> getMaintenanceIntervalsForMotorId(int motorId) async {
+    final db = await database;
+    return db.rawQuery('SELECT * FROM mentenanta_completa WHERE motor_id = ?', [motorId]);
   }
 }

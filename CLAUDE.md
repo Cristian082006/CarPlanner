@@ -10,22 +10,31 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   incrementală cross-drive — `kotlin.incremental=false` e setat în `android/gradle.properties`
   ca fix suplimentar).
 - SQLite via `sqflite`, singleton în `lib/db/database_helper.dart`, cu migrații `onUpgrade`
-  (versiune curentă: 6 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
+  (versiune curentă: 7 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
   `changedComponentIds` pe `service_records`, v4 a adăugat `customIntervalKm/Months/Source` pe
   `component_records` + tabela `vehicle_extra_components`, v5 a adăugat coloana `engineCode` pe
-  `vehicles`, v6 a adăugat tabelele de catalog `vehicle_models`/`maintenance_intervals`). **Atenție
-  la migrații reutilizate:** `_createComponentRecordsTable` construiește schema originală v2 (fără
-  coloanele custom*) fiindcă e refolosită de calea de upgrade `oldVersion<2` — `_onCreate` aplică
-  deltele ulterioare (ALTER) separat, la fel ca un upgrade real, ca să nu existe două căi de cod cu
-  scheme diferite pentru instalare nouă vs. upgrade. Tabela `vehicles` NU are problema asta
-  (construită inline, nu prin funcție reutilizată), deci coloana `engineCode` a putut fi adăugată
-  direct în `CREATE TABLE` + un singur `ALTER` la upgrade.
-- **Tabele de catalog** `vehicle_models`/`maintenance_intervals` — NU sunt date de utilizator, sunt
-  seedate (DELETE + INSERT complet) la fiecare bump de versiune DB din
-  `lib/utils/vehicle_reference_data.dart`. Conținutul e furnizat de utilizator (nu cercetat/
-  verificat de mine — sursă declarată: Autodata). Pentru actualizări viitoare: cere un export nou,
-  înlocuiește listele din `vehicle_reference_data.dart`, crește versiunea DB — nu edita rând cu
-  rând din memorie.
+  `vehicles`, v6 a adăugat un prim set de tabele de catalog `vehicle_models`/`maintenance_intervals`
+  — **înlocuite complet la v7**, dropuite necondiționat la orice upgrade `oldVersion<7`, nu mai
+  există în cod). **Atenție la migrații reutilizate:** `_createComponentRecordsTable` construiește
+  schema originală v2 (fără coloanele custom*) fiindcă e refolosită de calea de upgrade
+  `oldVersion<2` — `_onCreate` aplică deltele ulterioare (ALTER) separat, la fel ca un upgrade
+  real, ca să nu existe două căi de cod cu scheme diferite pentru instalare nouă vs. upgrade.
+  Tabela `vehicles` NU are problema asta (construită inline, nu prin funcție reutilizată), deci
+  coloana `engineCode` a putut fi adăugată direct în `CREATE TABLE` + un singur `ALTER` la upgrade.
+- **Tabele de catalog** (v7): schemă relațională `marci`→`modele`→`motoare`, cu intervale
+  specifice per motor în `intervale_mentenanta` (mai ales distribuție — singurul lucru care chiar
+  diferă per motor) și fallback pe intervale generice per combustibil în `intervale_generice`
+  pentru restul componentelor; view-ul SQL `mentenanta_completa` combină automat cele două
+  (`COALESCE` pe regula specifică, altfel cea generică). NU sunt date de utilizator — sunt recreate
+  integral (DROP + CREATE + INSERT) la fiecare bump de versiune DB, direct din instrucțiunile SQL
+  brute din `lib/utils/vehicle_reference_data.dart` (portate MySQL→SQLite dintr-un fișier furnizat
+  de utilizator — nu cercetate/verificate de mine, sursă declarată de el). Pentru actualizări
+  viitoare: cere un export SQL nou, adaptează doar sintaxa (fără `ENGINE=InnoDB`, `AUTO_INCREMENT`
+  → `INTEGER PRIMARY KEY AUTOINCREMENT`, `ENUM` → `TEXT`, `UNIQUE KEY nume (...)` → `UNIQUE (...)`),
+  înlocuiește `referenceDataStatements`, crește versiunea DB — **nu reordona/nu sări rânduri**:
+  `motoare`/`intervale_mentenanta` referă `model_id`/`motor_id` prin numere hardcodate care
+  presupun ordinea exactă de inserare (SQLite alocă id-uri auto-increment 1,2,3... în ordinea
+  inserării, la fel ca AUTO_INCREMENT în fișierul original).
 - Notificări locale: `flutter_local_notifications` + `timezone`.
 - OCR pe device (gratuit): `google_mlkit_text_recognition`, folosit pentru scanarea talonului auto.
 - Calendar: `add_2_calendar` (necesită permisiuni `READ_CALENDAR`/`WRITE_CALENDAR` +
@@ -87,17 +96,19 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   suficient de sigur de generalizat) — nu extinde la curea de distribuție etc. fără să verifici
   sursele, riscul de a afișa un interval greșit pe o componentă relevantă pentru siguranță e real.
 - **Rezolvarea intervalului de mentenanță** (`vehicle_detail_screen.dart` →
-  `_applyMaintenanceProfile`): cod motor (interogare `getMaintenanceIntervalsForEngineCode` pe
-  tabela `maintenance_intervals`, potrivire exactă pe `engine_code_key` normalizat) → dacă nu are
-  rânduri, fallback pe model/marcă din `maintenance_profiles.dart`
-  (`resolveMaintenanceProfile(make, model, year)`, fără parametrul `engineCode` — cel a fost mutat
-  la nivelul DB) → mașină veche (an < 2000) → nimic. Codul motor poate avea **mai multe rânduri**
-  (ulei, filtru combustibil, kit distribuție etc.), fiecare mapat la componenta corespunzătoare din
-  `vehicle_components.dart` prin `_componentIdsForName` (potrivire pe prefixul `component_name`,
-  ex. "Ulei motor" → `engine_oil`+`oil_filter`). Dacă `getVehicleModelForEngineCode` găsește un
-  rând, specificația de ulei (`oil_spec`, `oil_capacity`) se scrie automat în notele componentei
-  `engine_oil`, dar **doar dacă utilizatorul nu are deja notițe proprii acolo** — nu suprascrie
-  niciodată date introduse manual.
+  `_applyMaintenanceProfile`): cod motor (`getEngineForCode` găsește rândul din `motoare` după
+  `cod_motor_key` normalizat → `getMaintenanceIntervalsForMotorId` citește din view-ul
+  `mentenanta_completa`, care combină regulile specifice cu cele generice) → dacă nu are rânduri,
+  fallback pe model/marcă din `maintenance_profiles.dart` (`resolveMaintenanceProfile(make, model,
+  year)`) → mașină veche (an < 2000) → nimic. Un motor poate avea **multe rânduri** (ulei, filtre,
+  distribuție, curea accesorii, lichide, plăcuțe/discuri frână, bujii, ulei cutie, baterie...),
+  fiecare mapat la componenta din `vehicle_components.dart` prin `_componentIdsForName` (potrivire
+  EXACTĂ pe numele `componenta`, nu pe prefix — numele sunt acum fixe, definite în
+  `vehicle_reference_data.dart`, nu variază per marcă). Componente găsite în date dar fără id încă
+  în tracker (ulei diferențial, DPF, AdBlue) sunt pur și simplu ignorate (`_componentIdsForName`
+  întoarce listă goală) — nu extinde `vehicle_components.dart` pentru ele fără cerere explicită.
+  Componentele găsite care nu sunt în `essentialComponents` (ex. `glow_plugs` — bujii incandescente,
+  doar diesel) se leagă automat de mașină via `addExtraComponent`, la fel ca extra-urile universale.
 - `lib/screens/settings_screen.dart` — ecran Setări cu **doar 2 opțiuni** (nu country picker
   complet cu toate țările): România vs. „Alte țări (Internațional)”, plus o notă că denumiri
   per-țară suplimentare vin într-o versiune viitoare. Pachetul `country_picker` a fost eliminat
@@ -134,12 +145,13 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
    interogare automată reală (vezi `lib/utils/document_verification_utils.dart` mai sus, motivul
    e CAPTCHA-ul obligatoriu pe toate cele trei surse).
 9. Buton „Sugerează intervale pentru {marcă} {model}” pe tabul Info al mașinii — aplică (cu
-   dialog de confirmare) intervalele găsite pentru `engineCode` în tabelele de catalog
-   `vehicle_models`/`maintenance_intervals` (vezi mai sus), cu fallback pe model → marcă →
-   mașină-veche (an < 2000) → nimic. Actualizează toate componentele găsite pentru codul motor
-   (nu doar ulei — poate include filtru combustibil, kit distribuție etc., după ce conține
-   catalogul) și adaugă (dacă lipsesc) „Ulei cutie de viteze” și „Ștergătoare parbriz” în tabul
-   Componente. Fără nicio potrivire, doar adaugă componentele lipsă, fără să schimbe intervale.
+   dialog de confirmare) intervalele găsite pentru `engineCode` în schema relațională de catalog
+   (vezi mai sus), cu fallback pe model → marcă → mașină-veche (an < 2000) → nimic. Actualizează
+   toate componentele găsite pentru codul motor (ulei, filtre, distribuție, curea accesorii,
+   lichide, plăcuțe/discuri frână, bujii, ulei cutie, baterie...) și adaugă automat orice
+   componentă lipsă din tracker (inclusiv „Ulei cutie de viteze”/„Ștergătoare parbriz”, adăugate
+   mereu). Fără nicio potrivire, doar adaugă componentele universale lipsă, fără să schimbe
+   intervale.
 10. Câmp „Cod motor” pe vehicul (opțional) — completat manual sau best-effort din scanarea
     talonului (`document_scanner_service.dart`); alimentează catalogul din punctul 9.
 
@@ -170,6 +182,12 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
 - `test/widget_test.dart` e cunoscut ca fiind flaky/minimal pe acest mediu Windows — `sqflite`
   FFI (`sqflite_common_ffi`) nu are un `databaseFactory` funcțional aici. Nu insista să-l repari;
   e o limitare de mediu, nu o regresie de cod.
+- **Inspectare directă a DB de pe device/emulator** (util când un bug pare să fie în date, nu în
+  cod): `adb -s <device> exec-out run-as com.dodea.car_planner cat databases/car_planner.db >
+  local.db`, apoi interoghează cu `sqlite3` local (disponibil la `C:\platform-tools\sqlite3` pe
+  mașina asta). Funcționează fiindcă build-ul debug e `run-as`-abil implicit. Șterge fișierul local
+  după — poate conține date personale ale userului (plăcuțe, VIN etc. din mașinile lui reale, nu
+  doar din cele de test).
 
 ## Convenții
 

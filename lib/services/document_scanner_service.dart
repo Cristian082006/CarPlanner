@@ -43,6 +43,21 @@ class DocumentScannerService {
   static final RegExp _platePattern =
       RegExp(r'\b([A-Z]{1,2})\s?-?\s?(\d{2,3})\s?-?\s?([A-Z]{3})\b');
 
+  /// Eticheta câmpului E (VIN) de pe talonul armonizat UE — la fel ca D.3
+  /// pentru model, căutăm explicit eticheta în loc să presupunem că VIN-ul
+  /// e undeva pe text: câmpul E nu are subnumerotare ("E)", nu "E.1)"), deci
+  /// nu se potrivește cu `_fieldLabel`.
+  static final RegExp _vinFieldCode = RegExp(r'^E[).]', caseSensitive: false);
+
+  /// Literele I, O, Q nu apar niciodată într-un VIN real (excluse explicit
+  /// din standard ca să nu se confunde cu 1/0). OCR-ul le scrie totuși
+  /// uneori în locul cifrei corespunzătoare, mai ales pe fonturi stencil de
+  /// pe talon — corectăm asta DOAR pe o linie deja ancorată de eticheta E),
+  /// unde suntem siguri că textul chiar reprezintă VIN-ul (nu are sens să
+  /// aplicăm corecția pe un scan orb al întregii pagini, ar da fals-pozitive).
+  static String _fixVinOcrConfusables(String value) =>
+      value.replaceAll('O', '0').replaceAll('Q', '0').replaceAll('I', '1');
+
   /// Etichetele de câmp de pe talon (ex: "D.1)", "D.3", "E.") — necesită
   /// explicit un punct urmat de o cifră, ca să nu confunde cuvinte normale
   /// (ex: "VOLKSWAGEN") cu o etichetă de 1-2 litere.
@@ -107,6 +122,26 @@ class DocumentScannerService {
 
     String? make;
     final lines = rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+
+    // VIN ancorat de eticheta E) — mai robust decât scanarea oarbă de mai
+    // sus, care ratează VIN-ul dacă OCR-ul citește greșit o singură literă
+    // (mai ales O/Q/I în locul lui 0/0/1, frecvent pe fonturile stencil de
+    // pe talon). Corecția de confuzii se aplică doar aici, unde eticheta ne
+    // dă certitudinea că textul chiar reprezintă VIN-ul.
+    String? labeledVin;
+    for (var i = 0; i < lines.length; i++) {
+      if (!_vinFieldCode.hasMatch(lines[i])) continue;
+      final sameLineValue = lines[i].replaceFirst(_vinFieldCode, '').trim();
+      final candidates = [sameLineValue, if (i + 1 < lines.length) lines[i + 1]];
+      for (final raw in candidates) {
+        final compact = _fixVinOcrConfusables(raw.toUpperCase()).replaceAll(RegExp(r'[\s-]'), '');
+        if (RegExp(r'^[A-HJ-NPR-Z0-9]{17}$').hasMatch(compact)) {
+          labeledVin = compact;
+          break;
+        }
+      }
+      break;
+    }
 
     outer:
     for (var i = 0; i < lines.length; i++) {
@@ -181,7 +216,7 @@ class DocumentScannerService {
     return ScannedVehicleData(
       make: make,
       model: model,
-      vin: vinMatch?.group(0),
+      vin: labeledVin ?? vinMatch?.group(0),
       plateNumber: plateNumber,
       engineCode: engineCode,
       rawText: rawText,

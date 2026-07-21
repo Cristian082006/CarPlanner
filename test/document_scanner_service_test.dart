@@ -102,4 +102,37 @@ Combustibil
 
     expect(result.engineCode, isNull);
   });
+
+  test('extracts VIN from the E) field even when OCR misreads 0 as O', () {
+    // Regresie: OCR confundă frecvent cifra 0 cu litera O (mai ales pe
+    // fonturi stencil de pe talon), ceea ce rupea potrivirea regexului strict
+    // de 17 caractere. Ancorarea pe eticheta E) permite corectarea sigură a
+    // acestei confuzii, fiindcă știm cu certitudine că linia reprezintă VIN-ul.
+    const sampleText = '''
+E) Numar de identificare (VIN)
+WVWZZZ9NZ8Y1234O6
+''';
+
+    final result = scanner.parseTalonText(sampleText);
+
+    expect(result.vin, 'WVWZZZ9NZ8Y1234O6'.replaceAll('O', '0'));
+  });
+
+  test('extracts VIN placed directly on the E) label line', () {
+    final result = scanner.parseTalonText('E) WVWZZZ9NZ8Y123456');
+
+    expect(result.vin, 'WVWZZZ9NZ8Y123456');
+  });
+
+  test('falls back to the blind VIN scan when no E) label is present', () {
+    const sampleText = '''
+Some unlabeled scan text
+WVWZZZ9NZ8Y123456
+more text
+''';
+
+    final result = scanner.parseTalonText(sampleText);
+
+    expect(result.vin, 'WVWZZZ9NZ8Y123456');
+  });
 }

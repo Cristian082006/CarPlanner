@@ -147,10 +147,16 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
     );
     var title = S.vinCandidatesTitleExact;
     if (candidates.isEmpty && model.isNotEmpty) {
+      // Modelul a fost completat de utilizator — dacă nici fără filtrul de
+      // an nu găsim nimic, înseamnă că modelul respectiv pur și simplu nu e
+      // în catalog pentru această marcă. NU lărgim căutarea la toată marca
+      // în acest caz: ar afișa motoare de la alte modele (ex. Golf/Passat
+      // pentru cineva cu un Polo), care ar părea corecte dar nu sunt.
       candidates = await _db.getCandidateEnginesForVin(marca: make, model: model, matchYear: false);
       title = S.vinCandidatesTitleModel;
-    }
-    if (candidates.isEmpty) {
+    } else if (candidates.isEmpty) {
+      // Modelul a fost lăsat necompletat — nu avem cum să restrângem mai
+      // mult, deci arătăm toate motoarele mărcii ca ultimă opțiune.
       candidates = await _db.getCandidateEnginesForVin(marca: make, matchModel: false, matchYear: false);
       title = S.vinCandidatesTitleMake;
     }

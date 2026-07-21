@@ -6,6 +6,7 @@ import '../db/database_helper.dart';
 import '../l10n/strings.dart';
 import '../models/vehicle.dart';
 import '../services/document_scanner_service.dart';
+import '../utils/vin_decoder.dart';
 import '../widgets/photo_picker_field.dart';
 
 class AddEditVehicleScreen extends StatefulWidget {
@@ -115,6 +116,95 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
+  }
+
+  Future<void> _decodeVinEngine() async {
+    final vin = _vinCtrl.text.trim();
+    if (!isValidVinFormat(vin)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinInvalidFormat)));
+      return;
+    }
+    final make = _makeCtrl.text.trim();
+    if (make.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinMakeRequired)));
+      return;
+    }
+
+    final result = decodeVin(vin);
+    if (result.detectedMake != null && result.detectedMake!.toLowerCase() != make.toLowerCase()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(S.vinMakeMismatch(result.detectedMake!, make)),
+      ));
+    }
+
+    final model = _modelCtrl.text.trim();
+
+    var candidates = await _db.getCandidateEnginesForVin(
+      marca: make,
+      model: model,
+      year: result.modelYear,
+    );
+    var title = S.vinCandidatesTitleExact;
+    if (candidates.isEmpty && model.isNotEmpty) {
+      candidates = await _db.getCandidateEnginesForVin(marca: make, model: model, matchYear: false);
+      title = S.vinCandidatesTitleModel;
+    }
+    if (candidates.isEmpty) {
+      candidates = await _db.getCandidateEnginesForVin(marca: make, matchModel: false, matchYear: false);
+      title = S.vinCandidatesTitleMake;
+    }
+
+    if (!mounted) return;
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinNoEngineMatches)));
+      return;
+    }
+
+    final chosen = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: candidates.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (ctx, i) {
+              final e = candidates[i];
+              final modelLabel = [e['model_nume'], e['model_generatie']]
+                  .where((v) => v != null && v.toString().isNotEmpty)
+                  .join(' ');
+              final engineLabel = e['denumire_comerciala'] ?? e['cod_motor'];
+              final specs = [
+                e['combustibil'],
+                if (e['capacitate_cm3'] != null) '${e['capacitate_cm3']} cm³',
+                if (e['putere_cp'] != null) '${e['putere_cp']} CP',
+              ].where((v) => v != null && v.toString().isNotEmpty).join(', ');
+              return ListTile(
+                title: Text('$modelLabel — $engineLabel (${e['cod_motor']})'),
+                subtitle: Text(specs),
+                onTap: () => Navigator.pop(ctx, e),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(S.cancel)),
+        ],
+      ),
+    );
+
+    if (chosen == null) return;
+    setState(() {
+      _engineCodeCtrl.text = chosen['cod_motor'] as String;
+      if (_fuelCtrl.text.trim().isEmpty && chosen['combustibil'] != null) {
+        _fuelCtrl.text = chosen['combustibil'] as String;
+      }
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinEngineApplied)));
   }
 
   Future<void> _save() async {
@@ -252,7 +342,14 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _vinCtrl,
-              decoration: InputDecoration(labelText: S.vinOptional),
+              decoration: InputDecoration(
+                labelText: S.vinOptional,
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.settings_input_component_outlined),
+                  tooltip: S.decodeEngineFromVin,
+                  onPressed: _decodeVinEngine,
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             Row(

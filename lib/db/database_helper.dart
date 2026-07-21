@@ -434,4 +434,42 @@ class DatabaseHelper {
     final db = await database;
     return db.rawQuery('SELECT * FROM mentenanta_completa WHERE motor_id = ?', [motorId]);
   }
+
+  /// Motoare candidate din catalog pentru decodarea VIN: filtrează pe marcă
+  /// (obligatoriu), opțional pe model (potrivire parțială, insensibilă la
+  /// majuscule) și pe anul de fabricație (în intervalul `an_start`/`an_stop`
+  /// al modelului). Nu decodifică motorul direct din caracterele VIN — doar
+  /// restrânge catalogul existent la ce e plauzibil pentru marca/anul găsite,
+  /// utilizatorul alegând motorul exact din listă. `null`/gol dacă [marca]
+  /// lipsește.
+  Future<List<Map<String, Object?>>> getCandidateEnginesForVin({
+    String? marca,
+    String? model,
+    int? year,
+    bool matchYear = true,
+    bool matchModel = true,
+  }) async {
+    if (marca == null || marca.trim().isEmpty) return [];
+    final db = await database;
+    final where = StringBuffer('LOWER(ma.nume) = ?');
+    final args = <Object?>[marca.trim().toLowerCase()];
+    if (matchModel && model != null && model.trim().isNotEmpty) {
+      where.write(' AND LOWER(mo.nume) LIKE ?');
+      args.add('%${model.trim().toLowerCase()}%');
+    }
+    if (matchYear && year != null) {
+      where.write(' AND (mo.an_start IS NULL OR mo.an_start <= ?)');
+      args.add(year);
+      where.write(' AND (mo.an_stop IS NULL OR mo.an_stop >= ?)');
+      args.add(year);
+    }
+    return db.rawQuery('''
+      SELECT mt.*, mo.nume AS model_nume, mo.generatie AS model_generatie, ma.nume AS marca_nume
+      FROM motoare mt
+      JOIN modele mo ON mo.id = mt.model_id
+      JOIN marci ma ON ma.id = mo.marca_id
+      WHERE $where
+      ORDER BY mo.nume, mt.denumire_comerciala
+    ''', args);
+  }
 }

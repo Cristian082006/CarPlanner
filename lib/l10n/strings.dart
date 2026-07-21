@@ -89,6 +89,31 @@ class S {
   static String get scanFailed => _ro
       ? 'Scanarea a eșuat. Completează câmpurile manual.'
       : 'Scan failed. Please fill in the fields manually.';
+  static String get decodeEngineFromVin =>
+      _ro ? 'Decodifică motor din VIN' : 'Decode engine from VIN';
+  static String get vinInvalidFormat => _ro
+      ? 'VIN invalid — trebuie să aibă 17 caractere (fără I, O, Q).'
+      : 'Invalid VIN — must be 17 characters (no I, O, Q).';
+  static String get vinMakeRequired => _ro
+      ? 'Completează marca mașinii înainte de decodare.'
+      : 'Fill in the make before decoding.';
+  static String get vinNoEngineMatches => _ro
+      ? 'Nu am găsit motoare în catalog pentru această marcă/model/an. Completează manual codul motorului.'
+      : 'No matching engines found in the catalog for this make/model/year. Please fill in the engine code manually.';
+  static String vinMakeMismatch(String detected, String typed) => _ro
+      ? 'VIN-ul pare să fie de la $detected, dar ai completat marca $typed. Verifică marca — se caută în catalog după $typed.'
+      : 'This VIN looks like it\'s from $detected, but you entered $typed as the make. Please double-check — the catalog search uses $typed.';
+  static String get vinCandidatesTitleExact =>
+      _ro ? 'Motoare posibile (marcă/model/an)' : 'Possible engines (make/model/year)';
+  static String get vinCandidatesTitleModel =>
+      _ro ? 'Motoare posibile (marcă/model, orice an)' : 'Possible engines (make/model, any year)';
+  static String get vinCandidatesTitleMake =>
+      _ro ? 'Motoare posibile (doar marcă)' : 'Possible engines (make only)';
+  static String get vinCandidatesHint => _ro
+      ? 'Alege motorul care corespunde mașinii tale:'
+      : 'Choose the engine that matches your car:';
+  static String get vinEngineApplied =>
+      _ro ? 'Cod motor completat din catalog.' : 'Engine code filled in from the catalog.';
 
   // ---------- Add/Edit service record screen ----------
   static String get editServiceRecord => _ro ? 'Editează revizia' : 'Edit service record';

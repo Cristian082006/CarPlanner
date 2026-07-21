@@ -24,7 +24,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'car_planner.db');
     return openDatabase(
       path,
-      version: 8,
+      version: 9,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -72,6 +72,23 @@ class DatabaseHelper {
       // mărci / 153 modele / 256 motorizări, față de 18/60/91 în v7) — doar
       // date noi, schema tabelelor e neschimbată. Drop necondiționat +
       // reseed, la fel ca la v7, ca id-urile auto-increment să pornească
+      // curat de la 1 și să corespundă exact numerelor din
+      // `vehicle_reference_data.dart`.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 9) {
+      // v9 înlocuiește integral catalogul cu `auto_mentenanta_7.sql` (26
+      // mărci / 264 modele / 449 motorizări, față de 18/153/256 în v8) — 8
+      // mărci noi și generații mai vechi adăugate la mărcile existente. Doar
+      // date noi, schema tabelelor e neschimbată. Drop necondiționat +
+      // reseed, la fel ca la v7/v8, ca id-urile auto-increment să pornească
       // curat de la 1 și să corespundă exact numerelor din
       // `vehicle_reference_data.dart`.
       await db.execute('DROP VIEW IF EXISTS mentenanta_completa');

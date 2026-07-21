@@ -10,31 +10,39 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   incrementală cross-drive — `kotlin.incremental=false` e setat în `android/gradle.properties`
   ca fix suplimentar).
 - SQLite via `sqflite`, singleton în `lib/db/database_helper.dart`, cu migrații `onUpgrade`
-  (versiune curentă: 7 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
+  (versiune curentă: 8 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
   `changedComponentIds` pe `service_records`, v4 a adăugat `customIntervalKm/Months/Source` pe
   `component_records` + tabela `vehicle_extra_components`, v5 a adăugat coloana `engineCode` pe
   `vehicles`, v6 a adăugat un prim set de tabele de catalog `vehicle_models`/`maintenance_intervals`
   — **înlocuite complet la v7**, dropuite necondiționat la orice upgrade `oldVersion<7`, nu mai
-  există în cod). **Atenție la migrații reutilizate:** `_createComponentRecordsTable` construiește
-  schema originală v2 (fără coloanele custom*) fiindcă e refolosită de calea de upgrade
-  `oldVersion<2` — `_onCreate` aplică deltele ulterioare (ALTER) separat, la fel ca un upgrade
-  real, ca să nu existe două căi de cod cu scheme diferite pentru instalare nouă vs. upgrade.
-  Tabela `vehicles` NU are problema asta (construită inline, nu prin funcție reutilizată), deci
-  coloana `engineCode` a putut fi adăugată direct în `CREATE TABLE` + un singur `ALTER` la upgrade.
-- **Tabele de catalog** (v7): schemă relațională `marci`→`modele`→`motoare`, cu intervale
-  specifice per motor în `intervale_mentenanta` (mai ales distribuție — singurul lucru care chiar
-  diferă per motor) și fallback pe intervale generice per combustibil în `intervale_generice`
-  pentru restul componentelor; view-ul SQL `mentenanta_completa` combină automat cele două
-  (`COALESCE` pe regula specifică, altfel cea generică). NU sunt date de utilizator — sunt recreate
-  integral (DROP + CREATE + INSERT) la fiecare bump de versiune DB, direct din instrucțiunile SQL
-  brute din `lib/utils/vehicle_reference_data.dart` (portate MySQL→SQLite dintr-un fișier furnizat
-  de utilizator — nu cercetate/verificate de mine, sursă declarată de el). Pentru actualizări
+  există în cod; v8 a înlocuit integral *datele* din catalogul de la v7 cu un export mai mare,
+  schema tabelelor rămânând neschimbată). **Atenție la migrații reutilizate:**
+  `_createComponentRecordsTable` construiește schema originală v2 (fără coloanele custom*) fiindcă
+  e refolosită de calea de upgrade `oldVersion<2` — `_onCreate` aplică deltele ulterioare (ALTER)
+  separat, la fel ca un upgrade real, ca să nu existe două căi de cod cu scheme diferite pentru
+  instalare nouă vs. upgrade. Tabela `vehicles` NU are problema asta (construită inline, nu prin
+  funcție reutilizată), deci coloana `engineCode` a putut fi adăugată direct în `CREATE TABLE` +
+  un singur `ALTER` la upgrade.
+- **Tabele de catalog** (schemă din v7, date din v8): schemă relațională `marci`→`modele`→`motoare`
+  (18 mărci / 153 modele / 256 motorizări, portate din `auto_mentenanta_3.sql` — v7 avea 18/60/91,
+  din `auto_mentenanta_2.sql`), cu intervale specifice per motor în `intervale_mentenanta` (mai
+  ales distribuție — singurul lucru care chiar diferă per motor) și fallback pe intervale generice
+  per combustibil în `intervale_generice` pentru restul componentelor; view-ul SQL
+  `mentenanta_completa` combină automat cele două (`COALESCE` pe regula specifică, altfel cea
+  generică). NU sunt date de utilizator — sunt recreate integral (DROP + CREATE + INSERT) la
+  fiecare bump de versiune DB, direct din instrucțiunile SQL brute din
+  `lib/utils/vehicle_reference_data.dart` (portate MySQL→SQLite dintr-un fișier furnizat de
+  utilizator — nu cercetate/verificate de mine, sursă declarată de el; fișierul sursă însuși
+  spune explicit că intervalele sunt orientative, nu preluate 1:1 din manualele fiecărui
+  producător — verifică mereu cartea tehnică pentru o mașină reală). Pentru actualizări
   viitoare: cere un export SQL nou, adaptează doar sintaxa (fără `ENGINE=InnoDB`, `AUTO_INCREMENT`
   → `INTEGER PRIMARY KEY AUTOINCREMENT`, `ENUM` → `TEXT`, `UNIQUE KEY nume (...)` → `UNIQUE (...)`),
   înlocuiește `referenceDataStatements`, crește versiunea DB — **nu reordona/nu sări rânduri**:
   `motoare`/`intervale_mentenanta` referă `model_id`/`motor_id` prin numere hardcodate care
   presupun ordinea exactă de inserare (SQLite alocă id-uri auto-increment 1,2,3... în ordinea
-  inserării, la fel ca AUTO_INCREMENT în fișierul original).
+  inserării, la fel ca AUTO_INCREMENT în fișierul original). Secțiunile `componente`/
+  `intervale_generice` au rămas identice între v7 și v8 (nu au fost regenerate în fișierul sursă),
+  deci `componenta_id`-urile din `intervale_generice` rămân valide neschimbate.
 - Notificări locale: `flutter_local_notifications` + `timezone`.
 - OCR pe device (gratuit): `google_mlkit_text_recognition`, folosit pentru scanarea talonului auto.
 - Calendar: `add_2_calendar` (necesită permisiuni `READ_CALENDAR`/`WRITE_CALENDAR` +

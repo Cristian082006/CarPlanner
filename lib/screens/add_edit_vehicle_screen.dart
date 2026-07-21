@@ -6,7 +6,9 @@ import '../db/database_helper.dart';
 import '../l10n/strings.dart';
 import '../models/vehicle.dart';
 import '../services/document_scanner_service.dart';
+import '../utils/engine_lookup.dart';
 import '../utils/vin_decoder.dart';
+import '../widgets/engine_candidates_dialog.dart';
 import '../widgets/photo_picker_field.dart';
 
 class AddEditVehicleScreen extends StatefulWidget {
@@ -130,98 +132,22 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       return;
     }
 
-    final result = decodeVin(vin);
+    final model = _modelCtrl.text.trim();
+    final result = await resolveEngineCandidatesFromVin(_db, vin: vin, make: make, model: model);
+
+    if (!mounted) return;
     if (result.detectedMake != null && result.detectedMake!.toLowerCase() != make.toLowerCase()) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(S.vinMakeMismatch(result.detectedMake!, make)),
       ));
     }
 
-    final model = _modelCtrl.text.trim();
-
-    var candidates = await _db.getCandidateEnginesForVin(
-      marca: make,
-      model: model,
-      year: result.modelYear,
-    );
-    var title = S.vinCandidatesTitleExact;
-    if (candidates.isEmpty && model.isNotEmpty) {
-      // Modelul a fost completat de utilizator — dacă nici fără filtrul de
-      // an nu găsim nimic, înseamnă că modelul respectiv pur și simplu nu e
-      // în catalog pentru această marcă. NU lărgim căutarea la toată marca
-      // în acest caz: ar afișa motoare de la alte modele (ex. Golf/Passat
-      // pentru cineva cu un Polo), care ar părea corecte dar nu sunt.
-      candidates = await _db.getCandidateEnginesForVin(marca: make, model: model, matchYear: false);
-      title = S.vinCandidatesTitleModel;
-    } else if (candidates.isEmpty) {
-      // Modelul a fost lăsat necompletat — nu avem cum să restrângem mai
-      // mult, deci arătăm toate motoarele mărcii ca ultimă opțiune.
-      candidates = await _db.getCandidateEnginesForVin(marca: make, matchModel: false, matchYear: false);
-      title = S.vinCandidatesTitleMake;
-    }
-
-    if (!mounted) return;
-    if (candidates.isEmpty) {
+    if (result.candidates.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinNoEngineMatches)));
       return;
     }
 
-    final isExactMatch = title == S.vinCandidatesTitleExact;
-
-    final chosen = await showDialog<Map<String, Object?>>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!isExactMatch && result.modelYear != null) ...[
-                Text(
-                  S.vinApproximateMatchHint(result.modelYear!),
-                  style: TextStyle(color: Theme.of(ctx).colorScheme.error),
-                ),
-                const SizedBox(height: 12),
-              ],
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: candidates.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (ctx, i) {
-                    final e = candidates[i];
-                    final modelLabel = [e['model_nume'], e['model_generatie']]
-                        .where((v) => v != null && v.toString().isNotEmpty)
-                        .join(' ');
-                    final engineLabel = e['denumire_comerciala'] ?? e['cod_motor'];
-                    final anStart = e['an_start'];
-                    final anStop = e['an_stop'];
-                    final yearRange = anStart != null ? '$anStart–${anStop ?? S.present}' : null;
-                    final specs = [
-                      e['combustibil'],
-                      if (e['capacitate_cm3'] != null) '${e['capacitate_cm3']} cm³',
-                      if (e['putere_cp'] != null) '${e['putere_cp']} CP',
-                      if (yearRange != null) yearRange,
-                    ].where((v) => v != null && v.toString().isNotEmpty).join(', ');
-                    return ListTile(
-                      title: Text('$modelLabel — $engineLabel (${e['cod_motor']})'),
-                      subtitle: Text(specs),
-                      onTap: () => Navigator.pop(ctx, e),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(S.cancel)),
-        ],
-      ),
-    );
-
+    final chosen = await showEngineCandidatesDialog(context, result);
     if (chosen == null) return;
     setState(() {
       _engineCodeCtrl.text = chosen['cod_motor'] as String;

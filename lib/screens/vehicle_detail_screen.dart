@@ -7,9 +7,12 @@ import '../models/component_record.dart';
 import '../models/service_record.dart';
 import '../models/vehicle.dart';
 import '../utils/date_utils.dart';
+import '../utils/engine_lookup.dart';
 import '../utils/maintenance_profiles.dart';
 import '../utils/vehicle_components.dart';
+import '../utils/vin_decoder.dart';
 import '../widgets/document_tile.dart';
+import '../widgets/engine_candidates_dialog.dart';
 import '../widgets/service_record_tile.dart';
 import 'add_edit_document_screen.dart';
 import 'add_edit_service_record_screen.dart';
@@ -175,7 +178,32 @@ class _InfoTab extends StatelessWidget {
     final db = DatabaseHelper.instance;
     final label = '${vehicle.make} ${vehicle.model}'.trim();
 
-    final engine = await db.getEngineForCode(vehicle.engineCode);
+    var engineCode = vehicle.engineCode;
+    // Fără cod motor completat manual, dar cu VIN disponibil — încearcă să-l
+    // deducă acum, la fel ca butonul de decodare VIN din ecranul de
+    // adăugare/editare, în loc să sară direct la profilul generic pe
+    // marcă/model/an. Utilizatorul tot alege motorul exact din listă (sau
+    // anulează), nu se completează nimic fără confirmare.
+    if ((engineCode == null || engineCode.trim().isEmpty) &&
+        vehicle.vin != null &&
+        isValidVinFormat(vehicle.vin!)) {
+      final vinResult = await resolveEngineCandidatesFromVin(
+        db,
+        vin: vehicle.vin!,
+        make: vehicle.make,
+        model: vehicle.model,
+      );
+      if (vinResult.candidates.isNotEmpty) {
+        if (!context.mounted) return;
+        final chosen = await showEngineCandidatesDialog(context, vinResult);
+        if (chosen != null) {
+          engineCode = chosen['cod_motor'] as String;
+          await db.updateVehicle(vehicle.copyWith(engineCode: engineCode));
+        }
+      }
+    }
+
+    final engine = await db.getEngineForCode(engineCode);
     final engineRows = engine != null
         ? await db.getMaintenanceIntervalsForMotorId(engine['id'] as int)
         : <Map<String, Object?>>[];

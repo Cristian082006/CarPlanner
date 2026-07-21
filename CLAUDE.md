@@ -52,6 +52,16 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
 - Poze: `image_picker` (cameră + galerie).
 - i18n: sistem propriu, lightweight (NU `flutter_localizations`/ARB) — clasa statică `S` din
   `lib/l10n/strings.dart`.
+- Iconița aplicației: generată cu `flutter_launcher_icons` (dev dependency) din
+  `assets/icon/icon.png` (1024×1024, fundal plin) + `assets/icon/icon_foreground.png` (aceleași
+  forme, fundal transparent, scalate la ~66% pentru zona sigură a iconițelor adaptive Android),
+  config în `pubspec.yaml` (cheia `flutter_launcher_icons:`). Sursele PNG au fost randate
+  programatic cu `tool/generate_icon.dart` (rulează `flutter test tool/generate_icon.dart` —
+  desenează pe un `CustomPainter`/`Canvas` și salvează cu `RenderRepaintBoundary.toImage`, învelit
+  în `tester.runAsync` fiindcă `toImage`/`toByteData` fac IO real pe thread-ul de rasterizare și
+  blochează la infinit în zona FakeAsync a `testWidgets` fără asta). După orice modificare a
+  desenului, rulează din nou `tool/generate_icon.dart` urmat de
+  `dart run flutter_launcher_icons` ca să regenereze toate dimensiunile pentru Android/iOS.
 
 ## Arhitectură — fișiere cheie
 
@@ -105,9 +115,30 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   fiind mai precise decât sunt. Acoperă doar engine_oil/oil_filter (singurul diferențiator
   suficient de sigur de generalizat) — nu extinde la curea de distribuție etc. fără să verifici
   sursele, riscul de a afișa un interval greșit pe o componentă relevantă pentru siguranță e real.
+- **Decodare VIN → motor** (`lib/utils/vin_decoder.dart` + `lib/utils/engine_lookup.dart` +
+  `lib/widgets/engine_candidates_dialog.dart`): `vin_decoder.dart` decodifică din VIN doar ce e cu
+  adevărat standardizat universal prin ISO 3779 — WMI (poziții 1-3 → marcă, tabel `_wmiToMake`
+  neexhaustiv, axat pe piața RO/UE) și anul-model (poziția 10, cu dezambiguizarea ciclului de 30
+  ani din `_decodeModelYear`); NU încearcă să extragă un cod de motor direct din caractere (asta ar
+  necesita tabele proprietare per producător pe care nu le avem). `engine_lookup.dart`
+  (`resolveEngineCandidatesFromVin`) combină anul/marca decodate cu catalogul static
+  (`getCandidateEnginesForVin` din `database_helper.dart`) printr-o cascadă de restrângere: marcă+
+  model+an exact → marcă+model orice an (doar dacă modelul a fost completat — NU lărgim la toată
+  marca dacă modelul chiar nu e în catalog, ar arăta motoare de la alt model care par corecte dar nu
+  sunt) → doar marcă (ultimă opțiune, doar când modelul lipsește). `engine_candidates_dialog.dart`
+  (`showEngineCandidatesDialog`) arată lista candidaților (cu intervalul de ani per motor) și, dacă
+  potrivirea nu e exactă, un avertisment vizibil că motoarele arătate pot fi de la altă generație.
+  Acest tripleu e folosit din **două locuri**: butonul de lângă câmpul VIN din
+  `add_edit_vehicle_screen.dart` (completează `Cod motor`/`Combustibil` în formular) și din
+  `_applyMaintenanceProfile` mai jos (completează `engineCode`-ul mașinii dacă lipsește, înainte de
+  a căuta intervale) — nu duplica logica de cascadă/dialog dacă mai apare un al treilea loc care
+  are nevoie de ea, extinde-le pe astea.
 - **Rezolvarea intervalului de mentenanță** (`vehicle_detail_screen.dart` →
-  `_applyMaintenanceProfile`): cod motor (`getEngineForCode` găsește rândul din `motoare` după
-  `cod_motor_key` normalizat → `getMaintenanceIntervalsForMotorId` citește din view-ul
+  `_applyMaintenanceProfile`): dacă mașina n-are `engineCode` completat dar are un VIN valid,
+  încearcă întâi să-l deducă via decodarea VIN de mai sus (utilizatorul alege din dialog sau
+  anulează — nu se completează nimic fără interacțiune); rezultatul (dacă există) se salvează pe
+  vehicul înainte de a continua. Apoi: cod motor (`getEngineForCode` găsește rândul din `motoare`
+  după `cod_motor_key` normalizat → `getMaintenanceIntervalsForMotorId` citește din view-ul
   `mentenanta_completa`, care combină regulile specifice cu cele generice) → dacă nu are rânduri,
   fallback pe model/marcă din `maintenance_profiles.dart` (`resolveMaintenanceProfile(make, model,
   year)`) → mașină veche (an < 2000) → nimic. Un motor poate avea **multe rânduri** (ulei, filtre,
@@ -154,16 +185,20 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
    oficială corectă (RAR/AIDA/CNAIR) și copiază nr. înmatriculare sau VIN în clipboard; NU e
    interogare automată reală (vezi `lib/utils/document_verification_utils.dart` mai sus, motivul
    e CAPTCHA-ul obligatoriu pe toate cele trei surse).
-9. Buton „Sugerează intervale pentru {marcă} {model}” pe tabul Info al mașinii — aplică (cu
-   dialog de confirmare) intervalele găsite pentru `engineCode` în schema relațională de catalog
-   (vezi mai sus), cu fallback pe model → marcă → mașină-veche (an < 2000) → nimic. Actualizează
-   toate componentele găsite pentru codul motor (ulei, filtre, distribuție, curea accesorii,
-   lichide, plăcuțe/discuri frână, bujii, ulei cutie, baterie...) și adaugă automat orice
-   componentă lipsă din tracker (inclusiv „Ulei cutie de viteze”/„Ștergătoare parbriz”, adăugate
-   mereu). Fără nicio potrivire, doar adaugă componentele universale lipsă, fără să schimbe
-   intervale.
-10. Câmp „Cod motor” pe vehicul (opțional) — completat manual sau best-effort din scanarea
-    talonului (`document_scanner_service.dart`); alimentează catalogul din punctul 9.
+9. Buton „Sugerează intervale pentru {marcă} {model}” pe tabul Info al mașinii — dacă lipsește
+   `engineCode` dar există un VIN valid, încearcă întâi să-l deducă din VIN (vezi „Decodare VIN →
+   motor” mai sus), apoi aplică (cu dialog de confirmare) intervalele găsite pentru `engineCode`
+   în schema relațională de catalog, cu fallback pe model → marcă → mașină-veche (an < 2000) →
+   nimic. Actualizează toate componentele găsite pentru codul motor (ulei, filtre, distribuție,
+   curea accesorii, lichide, plăcuțe/discuri frână, bujii, ulei cutie, baterie...) și adaugă
+   automat orice componentă lipsă din tracker (inclusiv „Ulei cutie de viteze”/„Ștergătoare
+   parbriz”, adăugate mereu). Fără nicio potrivire, doar adaugă componentele universale lipsă,
+   fără să schimbe intervale.
+10. Câmp „Cod motor” pe vehicul (opțional) — completat manual, best-effort din scanarea talonului
+    (`document_scanner_service.dart`), sau prin decodare VIN (butonul din formular sau automat la
+    „Sugerează intervale”, vezi mai sus); alimentează catalogul din punctul 9.
+11. Decodare VIN → motor (buton lângă câmpul VIN din formularul mașinii) — vezi secțiunea
+    „Decodare VIN → motor” de mai sus pentru detalii tehnice.
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

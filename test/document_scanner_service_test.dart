@@ -135,4 +135,26 @@ more text
 
     expect(result.vin, 'WVWZZZ9NZ8Y123456');
   });
+
+  test('extracts make/model/VIN from a real RAR talon layout (label E, no punctuation)', () {
+    // Regresie: pe un talon real (fotografiat de utilizator), eticheta E nu
+    // are nicio punctuație după literă ("E   WVWZZZ..."), spre deosebire de
+    // ce presupunea regexul inițial ("E)" sau "E."). Fără fix, VIN-ul nu era
+    // deloc extras pe scanări reale, deși testele cu "E)" fabricat treceau.
+    const sampleText = '''
+A IS-15-CPI
+J AUTOTURISM M1
+D.1 VOLKSWAGEN
+D.2 9N ABSBNMX01
+D.3 POLO
+E WVWZZZ9NZ9Y024262
+''';
+
+    final result = scanner.parseTalonText(sampleText);
+
+    expect(result.make, 'Volkswagen');
+    expect(result.model, 'POLO');
+    expect(result.plateNumber, 'IS15CPI');
+    expect(result.vin, 'WVWZZZ9NZ9Y024262');
+  });
 }

@@ -46,8 +46,11 @@ class DocumentScannerService {
   /// Eticheta câmpului E (VIN) de pe talonul armonizat UE — la fel ca D.3
   /// pentru model, căutăm explicit eticheta în loc să presupunem că VIN-ul
   /// e undeva pe text: câmpul E nu are subnumerotare ("E)", nu "E.1)"), deci
-  /// nu se potrivește cu `_fieldLabel`.
-  static final RegExp _vinFieldCode = RegExp(r'^E[).]', caseSensitive: false);
+  /// nu se potrivește cu `_fieldLabel`. Pe talonul românesc real eticheta
+  /// apare adesea ca simplu "E" urmat direct de spațiu și valoare, fără
+  /// punctuație — `(?![A-Za-z])` acceptă orice separator (sau capătul
+  /// liniei) după "E", dar nu confundă cuvinte care încep cu E ("Euro...").
+  static final RegExp _vinFieldCode = RegExp(r'^E(?![A-Za-z])', caseSensitive: false);
 
   /// Literele I, O, Q nu apar niciodată într-un VIN real (excluse explicit
   /// din standard ca să nu se confunde cu 1/0). OCR-ul le scrie totuși
@@ -123,7 +126,7 @@ class DocumentScannerService {
     String? make;
     final lines = rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
 
-    // VIN ancorat de eticheta E) — mai robust decât scanarea oarbă de mai
+    // VIN ancorat de eticheta E — mai robust decât scanarea oarbă de mai
     // sus, care ratează VIN-ul dacă OCR-ul citește greșit o singură literă
     // (mai ales O/Q/I în locul lui 0/0/1, frecvent pe fonturile stencil de
     // pe talon). Corecția de confuzii se aplică doar aici, unde eticheta ne

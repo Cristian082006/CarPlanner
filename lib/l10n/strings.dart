@@ -114,6 +114,10 @@ class S {
       : 'Choose the engine that matches your car:';
   static String get vinEngineApplied =>
       _ro ? 'Cod motor completat din catalog.' : 'Engine code filled in from the catalog.';
+  static String get present => _ro ? 'prezent' : 'present';
+  static String vinApproximateMatchHint(int year) => _ro
+      ? 'Fără potrivire exactă pentru anul $year — verifică anii afișați la fiecare motor înainte să alegi, pot fi de la o altă generație a modelului.'
+      : 'No exact match for year $year — check the years shown for each engine before picking, they may be from a different model generation.';
 
   // ---------- Add/Edit service record screen ----------
   static String get editServiceRecord => _ro ? 'Editează revizia' : 'Edit service record';

@@ -6,6 +6,7 @@ import '../models/car_document.dart';
 import '../models/component_record.dart';
 import '../models/service_record.dart';
 import '../models/vehicle.dart';
+import '../services/notification_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/engine_lookup.dart';
 import '../utils/maintenance_profiles.dart';
@@ -252,7 +253,7 @@ class _InfoTab extends StatelessWidget {
             addedCount++;
           }
           final existing = recordsById[componentId];
-          await db.upsertComponentRecord(ComponentRecord(
+          final updatedRecord = ComponentRecord(
             vehicleId: vehicle.id,
             componentId: componentId,
             lastChangedDate: existing?.lastChangedDate,
@@ -261,14 +262,20 @@ class _InfoTab extends StatelessWidget {
             customIntervalKm: row['interval_km'] as int?,
             customIntervalMonths: row['interval_luni'] as int?,
             customIntervalSource: engineDisplayName,
-          ));
+          );
+          await db.upsertComponentRecord(updatedRecord);
+          final definition = findComponentDefinition(componentId);
+          if (definition != null) {
+            await NotificationService.instance
+                .scheduleComponentReminder(definition, updatedRecord, vehicle.name);
+          }
           updatedCount++;
         }
       }
     } else if (fallbackProfile != null) {
       for (final componentId in const ['engine_oil', 'oil_filter']) {
         final existing = recordsById[componentId];
-        await db.upsertComponentRecord(ComponentRecord(
+        final updatedRecord = ComponentRecord(
           vehicleId: vehicle.id,
           componentId: componentId,
           lastChangedDate: existing?.lastChangedDate,
@@ -277,7 +284,13 @@ class _InfoTab extends StatelessWidget {
           customIntervalKm: fallbackProfile.engineOilIntervalKm,
           customIntervalMonths: fallbackProfile.engineOilIntervalMonths,
           customIntervalSource: fallbackProfile.displayName,
-        ));
+        );
+        await db.upsertComponentRecord(updatedRecord);
+        final definition = findComponentDefinition(componentId);
+        if (definition != null) {
+          await NotificationService.instance
+              .scheduleComponentReminder(definition, updatedRecord, vehicle.name);
+        }
         updatedCount++;
       }
     }
@@ -492,6 +505,7 @@ class _ComponentsTab extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => EditComponentScreen(
                   vehicleId: vehicle.id,
+                  vehicleLabel: vehicle.name,
                   definition: definition,
                   record: record,
                 ),

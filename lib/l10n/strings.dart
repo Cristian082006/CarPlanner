@@ -281,6 +281,16 @@ class S {
       ? '$vehicleLabel are revizia programată astăzi.'
       : '$vehicleLabel has its service scheduled today.';
   static String get genericReminderBody => _ro ? 'Reminder CarPlanner' : 'CarPlanner reminder';
+  static String componentDueSoonTitle(String componentName) =>
+      _ro ? '$componentName — recomandat curând' : '$componentName — due soon';
+  static String componentDueSoonBody(String componentName, String vehicleLabel) => _ro
+      ? '$componentName ($vehicleLabel) se apropie de intervalul recomandat de schimbare.'
+      : '$componentName ($vehicleLabel) is approaching its recommended change interval.';
+  static String componentOverdueTitle(String componentName) =>
+      _ro ? '$componentName — depășit' : '$componentName — overdue';
+  static String componentOverdueBody(String componentName, String vehicleLabel) => _ro
+      ? '$componentName ($vehicleLabel) a depășit intervalul recomandat de schimbare.'
+      : '$componentName ($vehicleLabel) is past its recommended change interval.';
 
   // ---------- Settings screen ----------
   static String get settingsTitle => _ro ? 'Setări' : 'Settings';

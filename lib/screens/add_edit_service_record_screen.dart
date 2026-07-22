@@ -132,13 +132,25 @@ class _AddEditServiceRecordScreenState extends State<AddEditServiceRecordScreen>
   Future<void> _syncChangedComponents(int? mileage) async {
     for (final componentId in _changedComponentIds) {
       final existing = _existingComponentRecords[componentId];
-      await _db.upsertComponentRecord(ComponentRecord(
+      final record = ComponentRecord(
         vehicleId: widget.vehicle.id,
         componentId: componentId,
         lastChangedDate: _date,
         lastChangedMileage: mileage ?? existing?.lastChangedMileage,
         notes: existing?.notes,
-      ));
+        customIntervalKm: existing?.customIntervalKm,
+        customIntervalMonths: existing?.customIntervalMonths,
+        customIntervalSource: existing?.customIntervalSource,
+      );
+      await _db.upsertComponentRecord(record);
+      final definition = findComponentDefinition(componentId);
+      if (definition != null) {
+        await NotificationService.instance.scheduleComponentReminder(
+          definition,
+          record,
+          widget.vehicle.name,
+        );
+      }
     }
   }
 

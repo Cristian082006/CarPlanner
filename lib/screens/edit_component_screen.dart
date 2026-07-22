@@ -3,17 +3,20 @@ import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
 import '../l10n/strings.dart';
 import '../models/component_record.dart';
+import '../services/notification_service.dart';
 import '../utils/date_utils.dart';
 import '../utils/vehicle_components.dart';
 
 class EditComponentScreen extends StatefulWidget {
   final String vehicleId;
+  final String vehicleLabel;
   final ComponentDefinition definition;
   final ComponentRecord? record;
 
   const EditComponentScreen({
     super.key,
     required this.vehicleId,
+    required this.vehicleLabel,
     required this.definition,
     this.record,
   });
@@ -65,6 +68,11 @@ class _EditComponentScreenState extends State<EditComponentScreen> {
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
     );
     await _db.upsertComponentRecord(record);
+    await NotificationService.instance.scheduleComponentReminder(
+      widget.definition,
+      record,
+      widget.vehicleLabel,
+    );
     if (!mounted) return;
     Navigator.pop(context);
   }

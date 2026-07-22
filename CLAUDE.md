@@ -170,8 +170,8 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
 1. CRUD mașini (multiple), revizii/carte service, documente, remindere personale.
 2. RCA/CASCO/Rovinietă/ITP + asigurare locuință afișate direct pe ecranul principal (nu ascunse
    în tab-uri), cu buton „Salvează în calendar” per document.
-3. Notificări locale pentru expirare documente (la N zile înainte + în ziua expirării) și
-   pentru revizii programate.
+3. Notificări locale pentru expirare documente (la N zile înainte + în ziua expirării), pentru
+   revizii programate și pentru componente (vezi punctul 12).
 4. Scanare OCR a talonului (cameră/galerie) → auto-completare marcă/model/VIN/nr. înmatriculare.
 5. Tracker componente esențiale (ulei, filtre, plăcuțe, curea etc.) cu interval recomandat și
    status calculat pe baza kilometrajului curent + data ultimei schimbări.
@@ -199,6 +199,20 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     „Sugerează intervale”, vezi mai sus); alimentează catalogul din punctul 9.
 11. Decodare VIN → motor (buton lângă câmpul VIN din formularul mașinii) — vezi secțiunea
     „Decodare VIN → motor” de mai sus pentru detalii tehnice.
+12. Notificări pentru componentele din tracker, în două mecanisme complementare (ambele în
+    `notification_service.dart`): **(a)** partea în *luni* a intervalului e programată dinainte
+    (`scheduleComponentReminder` — o notificare la 85% din interval „recomandat curând” + una la
+    100% „depășit”, calculate din `lastChangedDate` + `customIntervalMonths ?? intervalMonths`),
+    apelată din toate cele 3 locuri care fac `upsertComponentRecord` (ecranul de editare
+    componentă, bifele de la revizie, aplicarea profilului de mentenanță); **(b)** partea în *km*
+    nu poate fi programată dinainte (nu știm când se atinge kilometrajul), deci e verificată
+    reactiv (`checkComponentStatuses`) la salvarea mașinii cu kilometraj nou — trimite o
+    notificare imediată (`_plugin.show`) pentru fiecare componentă care tocmai a intrat în
+    dueSoon/overdue, cu deduplicare persistentă în `SharedPreferences` (cheie
+    `component_notified_{vehicleId}_{componentId}` = ultimul status notificat; se șterge când
+    statusul revine la ok/unset, ca o viitoare depășire să notifice din nou). Testat pe device:
+    setarea kilometrajului 0→40000 cu plăcuțe schimbate la 0 km a produs notificarea „Plăcuțe
+    frână față — depășit” o singură dată (a doua salvare identică nu a re-notificat).
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

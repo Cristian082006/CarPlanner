@@ -6,6 +6,7 @@ import '../db/database_helper.dart';
 import '../l10n/strings.dart';
 import '../models/vehicle.dart';
 import '../services/document_scanner_service.dart';
+import '../services/notification_service.dart';
 import '../utils/engine_lookup.dart';
 import '../utils/vin_decoder.dart';
 import '../widgets/engine_candidates_dialog.dart';
@@ -183,6 +184,16 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
     } else {
       await _db.insertVehicle(vehicle);
     }
+
+    // Partea în km a intervalului componentelor nu poate fi programată
+    // dinainte (nu știm când va ajunge utilizatorul la kilometrajul
+    // respectiv) — verificăm reactiv acum, la fiecare actualizare a
+    // kilometrajului curent, dacă vreo componentă tocmai a devenit
+    // "Recomandat curând"/"Depășit". Vezi `NotificationService.
+    // checkComponentStatuses`.
+    final records = await _db.getComponentRecords(vehicle.id);
+    final extraIds = await _db.getExtraComponentIds(vehicle.id);
+    await NotificationService.instance.checkComponentStatuses(vehicle, records, extraIds);
 
     if (!mounted) return;
     Navigator.pop(context);

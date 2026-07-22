@@ -8,7 +8,7 @@ class S {
   static bool get _ro => RegionService.instance.language == AppLanguage.ro;
 
   // ---------- General ----------
-  static String get appName => 'CarPlanner';
+  static String get appName => 'Calendar Auto';
   static String get requiredField => _ro ? 'Câmp obligatoriu' : 'Required field';
   static String get required => _ro ? 'Obligatoriu' : 'Required';
   static String get cancel => _ro ? 'Anulează' : 'Cancel';
@@ -258,7 +258,7 @@ class S {
 
   // ---------- Notifications ----------
   static String get notificationChannelName =>
-      _ro ? 'Remindere CarPlanner' : 'CarPlanner Reminders';
+      _ro ? 'Remindere Calendar Auto' : 'Calendar Auto Reminders';
   static String get notificationChannelDescription => _ro
       ? 'Notificări pentru revizii, expirări documente și remindere'
       : 'Notifications for service, document expiry and reminders';
@@ -280,7 +280,7 @@ class S {
   static String serviceDueTodayBody(String vehicleLabel) => _ro
       ? '$vehicleLabel are revizia programată astăzi.'
       : '$vehicleLabel has its service scheduled today.';
-  static String get genericReminderBody => _ro ? 'Reminder CarPlanner' : 'CarPlanner reminder';
+  static String get genericReminderBody => _ro ? 'Reminder Calendar Auto' : 'Calendar Auto reminder';
 
   // ---------- Settings screen ----------
   static String get settingsTitle => _ro ? 'Setări' : 'Settings';

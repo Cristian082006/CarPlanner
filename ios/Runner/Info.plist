@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Car Planner</string>
+	<string>Auto Calendar</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -27,15 +27,15 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>CarPlanner are nevoie de acces la cameră pentru a fotografia documente și dovezi de service.</string>
+	<string>Auto Calendar are nevoie de acces la cameră pentru a fotografia documente și dovezi de service.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>CarPlanner are nevoie de acces la poze pentru a atașa documente și dovezi de service.</string>
+	<string>Auto Calendar are nevoie de acces la poze pentru a atașa documente și dovezi de service.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>CarPlanner salvează pozele atașate documentelor și reviziilor tale.</string>
+	<string>Auto Calendar salvează pozele atașate documentelor și reviziilor tale.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>CarPlanner are nevoie de acces la calendar pentru a salva datele de expirare ale documentelor.</string>
+	<string>Auto Calendar are nevoie de acces la calendar pentru a salva datele de expirare ale documentelor.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>CarPlanner are nevoie de acces la calendar pentru a salva datele de expirare ale documentelor.</string>
+	<string>Auto Calendar are nevoie de acces la calendar pentru a salva datele de expirare ale documentelor.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

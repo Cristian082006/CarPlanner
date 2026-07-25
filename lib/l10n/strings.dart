@@ -8,7 +8,7 @@ class S {
   static bool get _ro => RegionService.instance.language == AppLanguage.ro;
 
   // ---------- General ----------
-  static String get appName => 'CarPlanner';
+  static String get appName => 'Auto Calendar';
   static String get requiredField => _ro ? 'Câmp obligatoriu' : 'Required field';
   static String get required => _ro ? 'Obligatoriu' : 'Required';
   static String get cancel => _ro ? 'Anulează' : 'Cancel';
@@ -258,7 +258,7 @@ class S {
 
   // ---------- Notifications ----------
   static String get notificationChannelName =>
-      _ro ? 'Remindere CarPlanner' : 'CarPlanner Reminders';
+      _ro ? 'Remindere Auto Calendar' : 'Auto Calendar Reminders';
   static String get notificationChannelDescription => _ro
       ? 'Notificări pentru revizii, expirări documente și remindere'
       : 'Notifications for service, document expiry and reminders';
@@ -280,7 +280,8 @@ class S {
   static String serviceDueTodayBody(String vehicleLabel) => _ro
       ? '$vehicleLabel are revizia programată astăzi.'
       : '$vehicleLabel has its service scheduled today.';
-  static String get genericReminderBody => _ro ? 'Reminder CarPlanner' : 'CarPlanner reminder';
+  static String get genericReminderBody =>
+      _ro ? 'Reminder Auto Calendar' : 'Auto Calendar reminder';
   static String componentDueSoonTitle(String componentName) =>
       _ro ? '$componentName — recomandat curând' : '$componentName — due soon';
   static String componentDueSoonBody(String componentName, String vehicleLabel) => _ro
@@ -291,6 +292,11 @@ class S {
   static String componentOverdueBody(String componentName, String vehicleLabel) => _ro
       ? '$componentName ($vehicleLabel) a depășit intervalul recomandat de schimbare.'
       : '$componentName ($vehicleLabel) is past its recommended change interval.';
+  static String mileageReminderTitle(String vehicleLabel) =>
+      _ro ? 'Actualizează kilometrajul — $vehicleLabel' : 'Update mileage — $vehicleLabel';
+  static String get mileageReminderBody => _ro
+      ? 'Introdu kilometrajul curent ca să vezi statusul la zi al componentelor.'
+      : 'Enter the current mileage to keep component statuses up to date.';
 
   // ---------- Settings screen ----------
   static String get settingsTitle => _ro ? 'Setări' : 'Settings';

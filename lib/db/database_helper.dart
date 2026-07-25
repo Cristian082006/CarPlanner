@@ -10,9 +10,15 @@ import '../utils/vehicle_reference_data.dart';
 
 class DatabaseHelper {
   DatabaseHelper._internal();
-  static final DatabaseHelper instance = DatabaseHelper._internal();
+  static DatabaseHelper? _instance;
+  static DatabaseHelper get instance => _instance ??= DatabaseHelper._internal();
 
   Database? _database;
+
+  static void clearInstance() {
+    _instance?._database = null;
+    _instance = null;
+  }
 
   Future<Database> get database async {
     _database ??= await _initDatabase();
@@ -24,7 +30,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'car_planner.db');
     return openDatabase(
       path,
-      version: 10,
+      version: 15,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -108,6 +114,99 @@ class DatabaseHelper {
       // necondiționat + reseed, la fel ca la v7/v8/v9, ca id-urile
       // auto-increment să pornească curat de la 1 și să corespundă exact
       // numerelor din `vehicle_reference_data.dart`.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 11) {
+      // v11 înlocuiește integral catalogul cu `auto_mentenanta_3.sql` (1663
+      // motorizări / 2344 reguli de mentenanță specifice, față de 778/1024 în
+      // v10, aceleași 26 mărci / 448 modele) — mult mai multe motorizări per
+      // model existent, nu mărci/modele noi. Doar date noi, schema tabelelor
+      // e neschimbată. Drop necondiționat + reseed, la fel ca la v7-v10, ca
+      // id-urile auto-increment să pornească curat de la 1 și să corespundă
+      // exact numerelor din `vehicle_reference_data.dart`.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 12) {
+      // v12 adaugă manual un singur motor lipsă (Ford Fiesta VI 1.6 TDCi,
+      // cod `T1DB`, cel mai probabil cod real dar neconfirmat exact de
+      // utilizator) + regula lui de curea de distribuție — nu un export nou
+      // integral, doar o completare punctuală cerută de un utilizator a
+      // cărui mașină nu se regăsea în catalogul v11. Același drop+reseed ca
+      // la actualizările integrale, ca id-urile auto-increment să rămână
+      // corecte (rândul nou e adăugat la finalul listelor din
+      // `vehicle_reference_data.dart`, deci nu schimbă id-urile existente).
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 13) {
+      // v13 înlocuiește ghicitul din v12 (`T1DB`, care nu era un cod
+      // confirmat) cu codurile reale primite de la utilizator pentru Fiesta
+      // VI 1.6 TDCi: HHJC/HHJD/HHJE (Euro 4, 90CP) și TZJA/TZJB/T1JA/UBJA
+      // (Euro 5, 95CP) — 7 motoare în loc de 1. Același drop+reseed ca la
+      // celelalte actualizări punctuale/integrale.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 14) {
+      // v14 elimină 882 de motorizări "H"/"L" descoperite ca fiind generate
+      // mecanic (nu date reale): toate codurile cu sufix H aveau
+      // putere_cp = bază*1,25 și capacitate_cm3 = bază*1,12; cele cu sufix L
+      // aveau putere_cp = bază*0,82 și capacitate_cm3 = bază*0,88 — verificat
+      // pe 800+ perechi, deviație sub 1%, deci umplutură formulaică, nu
+      // cercetare per motor (de-aici și denumiri corupte gen "1.150
+      // MultiJet"). Vezi `referenceDataStatements` — statement-ul final
+      // (DELETE FROM motoare WHERE id IN (...)) rulează după INSERT-urile
+      // neschimbate, ca id-urile din `intervale_mentenanta` să rămână
+      // valide; ON DELETE CASCADE elimină automat regulile lor specifice.
+      // 18 coduri H/L rămân (coduri reale care doar se termină în H/L, ex.
+      // `ALH`, `AWL`, `Z19DTH`) — nu au un motor "de bază" cu care să
+      // formeze o pereche, deci n-au fost identificate ca sintetice.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 15) {
+      // v15 înlocuiește catalogul cu structura CONSOLIDATĂ din
+      // `auto_mentenanta_5.sql` (cerută explicit de utilizator): un singur
+      // rând în `modele` per nameplate (ex. un singur "Fiesta"/"Golf"), fără
+      // distincție de generație — astfel căutarea pe marcă+model+an întoarce
+      // TOATE motorizările modelului, nu doar pe cele ale generației
+      // potrivite pe an. 26 mărci / 235 modele / 763 motorizări (756 din
+      // export + cele 7 coduri reale Fiesta 1.6 TDCi primite de la
+      // utilizator la v13, re-adăugate manual fiindcă lipsesc din exportul
+      // consolidat). Coloana `generatie` rămâne în schemă dar e NULL peste
+      // tot. Același drop+reseed ca la actualizările anterioare.
       await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
       await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
       await db.execute('DROP TABLE IF EXISTS intervale_generice');

@@ -1,149 +1,135 @@
-library;
+-- ============================================================================
+-- Baza de date: auto_mentenanta
+-- Marci, modele (consolidate, fara distinctie de generatie) si motoare
+-- Acopera perioada 2005-prezent. Intervale de mentenanta (km / timp).
+-- Compatibil MySQL 8+ / MariaDB 10.4+
+-- ============================================================================
 
-/// Date de referință auto — furnizate de utilizator (nu cercetate/verificate
-/// de mine), portate din `auto_mentenanta_5.sql` (schemă MySQL) în SQLite,
-/// urmând notele de portare din chiar acel fișier: fără `ENGINE=InnoDB`,
-/// `AUTO_INCREMENT` → `INTEGER PRIMARY KEY AUTOINCREMENT`, `ENUM` → `TEXT`,
-/// `UNIQUE KEY nume (...)` → `UNIQUE (...)`.
-///
-/// Schemă relațională: `marci` → `modele` → `motoare`, cu intervale
-/// specifice per motor în `intervale_mentenanta` (doar distribuție —
-/// singurul lucru care chiar diferă per motor, nu per model/marcă) și
-/// fallback pe intervale generice per combustibil în `intervale_generice`
-/// pentru restul componentelor. View-ul `mentenanta_completa` combină
-/// automat cele două (COALESCE pe regula specifică, altfel cea generică).
-///
-/// v15 (`auto_mentenanta_5.sql`) — structură CONSOLIDATĂ, cerută explicit de
-/// utilizator: un singur rând în `modele` per nameplate (ex. un singur
-/// „Fiesta”, un singur „Golf”), fără distincție de generație (V/VI/VII...),
-/// cu `an_start`/`an_stop` acoperind toate generațiile combinate (de la
-/// ~2005 în sus); fiecare motorizare din `motoare` își păstrează propriul
-/// interval de ani, mai precis. Astfel căutarea pe marcă+model+an întoarce
-/// TOATE motorizările nameplate-ului, nu doar pe cele ale unei generații.
-/// 26 mărci / 235 modele / 756+7 motorizări / 1075+14 reguli specifice
-/// (față de 448 modele-cu-generație / 788 motorizări rămase în v14). Cele
-/// „+7” sunt motoarele Fiesta VI 1.6 TDCi cu coduri reale primite de la
-/// utilizator la v13 (HHJC/HHJD/HHJE/TZJA/TZJB/T1JA/UBJA) — exportul
-/// consolidat NU le conține (are doar 9 motorizări de Fiesta, fără familia
-/// asta), așa că sunt re-adăugate manual la finalul secțiunilor `motoare`/
-/// `intervale_mentenanta`, legate de rândul consolidat „Fiesta”; nu le
-/// șterge la o viitoare portare fără să verifici că noul export le are.
-/// Coloana `generatie` rămâne în schemă pentru compatibilitate cu
-/// query-urile existente, dar e NULL peste tot (exportul nou nu o mai are).
-/// Exportul a fost verificat la portare pentru bug-ul de motoare generate
-/// mecanic descoperit la v14 (perechi H/L cu raport fix de putere/
-/// capacitate) — zero perechi suspecte, datele par curățate la sursă.
-/// Secțiunile `componente`/`intervale_generice`/`marci` sunt identice cu
-/// v7–v14 (verificat la portare), deci `componenta_id`-urile și
-/// `marca_id`-urile rămân valide neschimbate. Regulile specifice acoperă
-/// DOAR distribuția (componentele 5/6 — curea/lanț + kit); restul
-/// componentelor moștenesc regula generică pe combustibil, prin view.
-///
-/// Istoric versiuni anterioare (v7–v14, structură pe generații): vezi
-/// CLAUDE.md — inclusiv bug-ul celor 882 de motorizări „H”/„L” generate
-/// formulaic în exportul v11, eliminate la v14.
-///
-/// **Pentru actualizări viitoare:** cere un export SQL nou, adaptează doar
-/// sintaxa (aceleași reguli de mai sus) și înlocuiește lista de mai jos —
-/// crește versiunea DB în `database_helper.dart`. **Nu reordona și nu sări
-/// peste rânduri**: `motoare`/`intervale_mentenanta` referă `model_id`/
-/// `motor_id` prin numere întregi care presupun ordinea EXACTĂ de inserare
-/// din fișierul sursă (SQLite alocă id-uri auto-increment 1,2,3... în
-/// ordinea inserării — la fel cum presupunea și schema MySQL originală).
-/// Verifică din start numărul de rânduri și absența perechilor formulaice
-/// H/L înainte de portare.
-const List<String> referenceDataStatements = [
-  // ---------- Schemă ----------
-  """CREATE TABLE IF NOT EXISTS marci (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nume TEXT NOT NULL UNIQUE,
-    tara_origine TEXT
-  )""",
-  """CREATE TABLE IF NOT EXISTS modele (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    marca_id INTEGER NOT NULL,
-    nume TEXT NOT NULL,
-    generatie TEXT,
-    caroserie TEXT,
-    an_start INTEGER,
-    an_stop INTEGER,
+DROP DATABASE IF EXISTS auto_mentenanta;
+CREATE DATABASE auto_mentenanta CHARACTER SET utf8mb4 COLLATE utf8mb4_romanian_ci;
+USE auto_mentenanta;
+
+-- ----------------------------------------------------------------------------
+-- TABEL: marci
+-- ----------------------------------------------------------------------------
+CREATE TABLE marci (
+    id            INT PRIMARY KEY AUTO_INCREMENT,
+    nume          VARCHAR(60) NOT NULL UNIQUE,
+    tara_origine  VARCHAR(60)
+) ENGINE=InnoDB;
+
+-- ----------------------------------------------------------------------------
+-- TABEL: modele
+-- Un singur rand per nameplate (ex: 'Fiesta', 'Polo') - fara distinctie de
+-- generatie. an_start/an_stop acopera intreg intervalul (toate generatiile
+-- combinate, de la 2005 in sus). Motorizarile individuale din tabelul
+-- 'motoare' isi pastreaza propriul an_start/an_stop, mai precis.
+-- ----------------------------------------------------------------------------
+CREATE TABLE modele (
+    id          INT PRIMARY KEY AUTO_INCREMENT,
+    marca_id    INT NOT NULL,
+    nume        VARCHAR(80) NOT NULL,
+    caroserie   VARCHAR(40),
+    an_start    SMALLINT,
+    an_stop     SMALLINT,
     FOREIGN KEY (marca_id) REFERENCES marci(id) ON DELETE CASCADE,
-    UNIQUE (marca_id, nume, generatie)
-  )""",
-  """CREATE TABLE IF NOT EXISTS motoare (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    model_id INTEGER NOT NULL,
-    cod_motor TEXT NOT NULL,
-    cod_motor_key TEXT,
-    denumire_comerciala TEXT,
-    capacitate_cm3 INTEGER,
-    putere_cp INTEGER,
-    cilindri INTEGER,
-    combustibil TEXT NOT NULL,
-    tip_distributie TEXT DEFAULT 'N/A',
-    an_start INTEGER,
-    an_stop INTEGER,
+    UNIQUE KEY uq_model (marca_id, nume)
+) ENGINE=InnoDB;
+
+-- ----------------------------------------------------------------------------
+-- TABEL: motoare (toate motorizarile disponibile pentru fiecare model)
+-- ----------------------------------------------------------------------------
+CREATE TABLE motoare (
+    id                  INT PRIMARY KEY AUTO_INCREMENT,
+    model_id            INT NOT NULL,
+    cod_motor           VARCHAR(30) NOT NULL,
+    denumire_comerciala VARCHAR(60),
+    capacitate_cm3      INT,
+    putere_cp           INT,
+    cilindri            TINYINT,
+    combustibil         ENUM('Benzina','Diesel','Hibrid','Electric','GPL') NOT NULL,
+    tip_distributie     ENUM('Curea','Lant','Roti dintate','N/A') DEFAULT 'N/A',
+    an_start            SMALLINT,
+    an_stop             SMALLINT,
     FOREIGN KEY (model_id) REFERENCES modele(id) ON DELETE CASCADE,
-    UNIQUE (model_id, cod_motor)
-  )""",
-  """CREATE TABLE IF NOT EXISTS componente (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nume TEXT NOT NULL UNIQUE,
-    categorie TEXT NOT NULL,
-    descriere TEXT
-  )""",
-  """CREATE TABLE IF NOT EXISTS intervale_generice (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    combustibil TEXT NOT NULL,
-    componenta_id INTEGER NOT NULL,
-    interval_km INTEGER,
-    interval_luni INTEGER,
-    observatii TEXT,
+    UNIQUE KEY uq_motor (model_id, cod_motor)
+) ENGINE=InnoDB;
+
+-- ----------------------------------------------------------------------------
+-- TABEL: componente (piese/fluide supuse mentenantei periodice)
+-- ----------------------------------------------------------------------------
+CREATE TABLE componente (
+    id          INT PRIMARY KEY AUTO_INCREMENT,
+    nume        VARCHAR(80) NOT NULL UNIQUE,
+    categorie   ENUM('Fluide','Filtre','Distributie','Franare','Aprindere',
+                      'Suspensie/Transmisie','Curele auxiliare','Altele') NOT NULL,
+    descriere   VARCHAR(255)
+) ENGINE=InnoDB;
+
+-- ----------------------------------------------------------------------------
+-- TABEL: intervale_generice
+-- Intervale standard pe tip de combustibil, folosite ca fallback cand nu
+-- exista o regula specifica pentru un motor anume
+-- ----------------------------------------------------------------------------
+CREATE TABLE intervale_generice (
+    id             INT PRIMARY KEY AUTO_INCREMENT,
+    combustibil    ENUM('Benzina','Diesel','Hibrid','Electric','GPL') NOT NULL,
+    componenta_id  INT NOT NULL,
+    interval_km    INT,
+    interval_luni  INT,
+    observatii     VARCHAR(255),
     FOREIGN KEY (componenta_id) REFERENCES componente(id) ON DELETE CASCADE,
-    UNIQUE (combustibil, componenta_id)
-  )""",
-  """CREATE TABLE IF NOT EXISTS intervale_mentenanta (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    motor_id INTEGER NOT NULL,
-    componenta_id INTEGER NOT NULL,
-    interval_km INTEGER,
-    interval_luni INTEGER,
-    observatii TEXT,
+    UNIQUE KEY uq_generic (combustibil, componenta_id)
+) ENGINE=InnoDB;
+
+-- ----------------------------------------------------------------------------
+-- TABEL: intervale_mentenanta
+-- Reguli specifice per motor (ex: distributie -> variaza enorm intre motoare)
+-- Daca interval_km/interval_luni sunt NULL, se aplica regula din intervale_generice
+-- ----------------------------------------------------------------------------
+CREATE TABLE intervale_mentenanta (
+    id             INT PRIMARY KEY AUTO_INCREMENT,
+    motor_id       INT NOT NULL,
+    componenta_id  INT NOT NULL,
+    interval_km    INT,
+    interval_luni  INT,
+    observatii     VARCHAR(255),
     FOREIGN KEY (motor_id) REFERENCES motoare(id) ON DELETE CASCADE,
     FOREIGN KEY (componenta_id) REFERENCES componente(id) ON DELETE CASCADE,
-    UNIQUE (motor_id, componenta_id)
-  )""",
-  // `motor_id` adăugat față de view-ul original din fișierul sursă, ca să
-  // putem filtra direct pe motorul găsit prin `cod_motor_key`.
-  """CREATE VIEW IF NOT EXISTS mentenanta_completa AS
-  SELECT
-    mt.id AS motor_id,
-    ma.nume AS marca,
-    mo.nume AS model,
-    mt.cod_motor AS cod_motor,
+    UNIQUE KEY uq_interval_motor (motor_id, componenta_id)
+) ENGINE=InnoDB;
+
+-- ----------------------------------------------------------------------------
+-- VIEW: mentenanta_completa
+-- Combina regula specifica motorului cu fallback-ul generic pe combustibil
+-- ----------------------------------------------------------------------------
+CREATE VIEW mentenanta_completa AS
+SELECT
+    ma.nume            AS marca,
+    mo.nume            AS model,
+    mt.cod_motor       AS cod_motor,
     mt.denumire_comerciala,
     mt.combustibil,
-    c.nume AS componenta,
+    mt.an_start        AS motor_an_start,
+    mt.an_stop         AS motor_an_stop,
+    c.nume             AS componenta,
     c.categorie,
-    COALESCE(im.interval_km, ig.interval_km) AS interval_km,
+    COALESCE(im.interval_km,  ig.interval_km)   AS interval_km,
     COALESCE(im.interval_luni, ig.interval_luni) AS interval_luni,
-    COALESCE(im.observatii, ig.observatii, '') AS observatii,
+    COALESCE(im.observatii, ig.observatii, '')   AS observatii,
     CASE WHEN im.id IS NOT NULL THEN 'Specific motor' ELSE 'Regula generica' END AS sursa_regula
-  FROM motoare mt
-  JOIN modele mo ON mo.id = mt.model_id
-  JOIN marci ma ON ma.id = mo.marca_id
-  CROSS JOIN componente c
-  LEFT JOIN intervale_mentenanta im ON im.motor_id = mt.id AND im.componenta_id = c.id
-  LEFT JOIN intervale_generice ig ON ig.combustibil = mt.combustibil AND ig.componenta_id = c.id
-  WHERE im.id IS NOT NULL OR ig.id IS NOT NULL""",
-  "CREATE INDEX IF NOT EXISTS idx_modele_marca ON modele(marca_id)",
-  "CREATE INDEX IF NOT EXISTS idx_motoare_model ON motoare(model_id)",
-  "CREATE INDEX IF NOT EXISTS idx_motoare_cod_motor_key ON motoare(cod_motor_key)",
-  "CREATE INDEX IF NOT EXISTS idx_motoare_combustibil ON motoare(combustibil)",
-  "CREATE INDEX IF NOT EXISTS idx_intervale_motor ON intervale_mentenanta(motor_id)",
+FROM motoare mt
+JOIN modele mo ON mo.id = mt.model_id
+JOIN marci ma  ON ma.id = mo.marca_id
+CROSS JOIN componente c
+LEFT JOIN intervale_mentenanta im ON im.motor_id = mt.id AND im.componenta_id = c.id
+LEFT JOIN intervale_generice ig ON ig.combustibil = mt.combustibil AND ig.componenta_id = c.id
+WHERE im.id IS NOT NULL OR ig.id IS NOT NULL;
 
-  // ---------- Date: componente ----------
-  """INSERT INTO componente (nume, categorie, descriere) VALUES
+-- ============================================================================
+-- DATE: componente
+-- ============================================================================
+INSERT INTO componente (nume, categorie, descriere) VALUES
     ('Ulei motor + filtru ulei', 'Fluide', 'Schimb ulei motor si filtrul aferent'),
     ('Filtru aer motor', 'Filtre', 'Filtrul de admisie aer'),
     ('Filtru habitaclu (polen)', 'Filtre', 'Filtrul de aer din interiorul masinii'),
@@ -164,10 +150,13 @@ const List<String> referenceDataStatements = [
     ('Ulei diferential/punte', 'Suspensie/Transmisie', 'Tractiune integrala/spate'),
     ('Filtru de particule (DPF/FAP) - verificare/curatare', 'Filtre', 'Diesel; verificare stare si regenerare'),
     ('AdBlue (solutie SCR)', 'Fluide', 'Motoare diesel Euro 6 cu SCR'),
-    ('Baterie 12V', 'Altele', 'Verificare/inlocuire periodica')""",
+    ('Baterie 12V', 'Altele', 'Verificare/inlocuire periodica');
 
-  // ---------- Date: intervale generice per combustibil ----------
-  """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
+-- ============================================================================
+-- DATE: intervale_generice (reguli standard, pe tip combustibil)
+-- ============================================================================
+-- Benzina
+INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
     ('Benzina', 1, 15000, 12, 'Uleiuri moderne sintetice; verifica cartea tehnica'),
     ('Benzina', 2, 30000, 24, NULL),
     ('Benzina', 3, 15000, 12, NULL),
@@ -181,8 +170,10 @@ const List<String> referenceDataStatements = [
     ('Benzina', 14, 40000, NULL, 'Bujii iridiu/platina pot ajunge la 60-100k km'),
     ('Benzina', 17, 80000, 60, NULL),
     ('Benzina', 16, 60000, 48, NULL),
-    ('Benzina', 21, NULL, 60, 'In functie de conditii de utilizare')""",
-  """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
+    ('Benzina', 21, NULL, 60, 'In functie de conditii de utilizare');
+
+-- Diesel
+INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
     ('Diesel', 1, 15000, 12, 'Diesel moderne cu ulei long-life; unele modele 20-30k km'),
     ('Diesel', 2, 30000, 24, NULL),
     ('Diesel', 3, 15000, 12, NULL),
@@ -199,8 +190,10 @@ const List<String> referenceDataStatements = [
     ('Diesel', 16, 60000, 48, NULL),
     ('Diesel', 19, 120000, NULL, 'Regenerare periodica; curatare profesionala la colmatare'),
     ('Diesel', 20, NULL, NULL, 'Completare la fiecare ~8.000-10.000 km, in functie de consum'),
-    ('Diesel', 21, NULL, 60, NULL)""",
-  """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
+    ('Diesel', 21, NULL, 60, NULL);
+
+-- Hibrid
+INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
     ('Hibrid', 1, 15000, 12, 'Motorul termic ruleaza mai putin, dar respecta timpul'),
     ('Hibrid', 2, 30000, 24, NULL),
     ('Hibrid', 3, 15000, 12, NULL),
@@ -211,8 +204,10 @@ const List<String> referenceDataStatements = [
     ('Hibrid', 12, 100000, NULL, NULL),
     ('Hibrid', 13, 120000, NULL, NULL),
     ('Hibrid', 14, 60000, NULL, NULL),
-    ('Hibrid', 21, NULL, 60, NULL)""",
-  """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
+    ('Hibrid', 21, NULL, 60, NULL);
+
+-- Electric
+INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
     ('Electric', 8, 100000, 60, 'Racire baterie/electronica de putere'),
     ('Electric', 9, NULL, 24, NULL),
     ('Electric', 10, 80000, NULL, 'Franare regenerativa reduce mult uzura'),
@@ -221,10 +216,15 @@ const List<String> referenceDataStatements = [
     ('Electric', 13, 140000, NULL, NULL),
     ('Electric', 3, 15000, 12, NULL),
     ('Electric', 18, 60000, 60, 'Doar la modelele cu reductor/transmisie unica lubrifiata'),
-    ('Electric', 21, NULL, 60, 'Baterie auxiliara de bord, separata de bateria de tractiune')""",
+    ('Electric', 21, NULL, 60, 'Baterie auxiliara de bord, separata de bateria de tractiune');
 
-  // ---------- Date: marci ----------
-  """INSERT INTO marci (nume, tara_origine) VALUES
+-- ============================================================================
+-- DATE: marci
+-- ============================================================================
+-- ============================================================================
+-- DATE: marci
+-- ============================================================================
+INSERT INTO marci (nume, tara_origine) VALUES
     ('Dacia', 'Romania'),
     ('Volkswagen', 'Germania'),
     ('BMW', 'Germania'),
@@ -250,10 +250,12 @@ const List<String> referenceDataStatements = [
     ('Citroen', 'Franta'),
     ('Jeep', 'SUA'),
     ('Land Rover', 'Marea Britanie'),
-    ('Porsche', 'Germania')""",
+    ('Porsche', 'Germania');
 
-  // ---------- Date: modele (consolidate, fara generatie) ----------
-  """INSERT INTO modele (marca_id, nume, caroserie, an_start, an_stop) VALUES
+-- ============================================================================
+-- DATE: modele
+-- ============================================================================
+INSERT INTO modele (marca_id, nume, caroserie, an_start, an_stop) VALUES
     (5, 'A1', 'Hatchback', 2018, NULL),
     (5, 'A3', 'Hatchback/Sedan', 2003, NULL),
     (5, 'A4', 'Sedan/Combi', 2004, NULL),
@@ -488,10 +490,12 @@ const List<String> referenceDataStatements = [
     (15, 'V90', 'Combi', 2016, NULL),
     (15, 'XC40', 'SUV', 2017, NULL),
     (15, 'XC60', 'SUV', 2010, NULL),
-    (15, 'XC90', 'SUV', 2002, NULL)""",
+    (15, 'XC90', 'SUV', 2002, NULL);
 
-  // ---------- Date: motoare ----------
-  """INSERT INTO motoare (model_id, cod_motor, denumire_comerciala, capacitate_cm3, putere_cp, cilindri, combustibil, tip_distributie, an_start, an_stop) VALUES
+-- ============================================================================
+-- DATE: motoare
+-- ============================================================================
+INSERT INTO motoare (model_id, cod_motor, denumire_comerciala, capacitate_cm3, putere_cp, cilindri, combustibil, tip_distributie, an_start, an_stop) VALUES
     (1, 'DKRF', '25 TFSI', 999, 95, 3, 'Benzina', 'Lant', 2018, NULL),
     (1, 'DKRL', '30 TFSI', 999, 116, 3, 'Benzina', 'Lant', 2018, NULL),
     (2, 'BSE', '1.6 102', 1595, 102, 4, 'Benzina', 'Curea', 2003, 2012),
@@ -1247,23 +1251,16 @@ const List<String> referenceDataStatements = [
     (235, 'B6304', '2.9 T6', 2922, 272, 6, 'Benzina', 'Lant', 2002, 2014),
     (235, 'D5244', 'D5', 2400, 200, 5, 'Diesel', 'Curea', 2002, 2014),
     (235, 'B4204T', 'T5', 1969, 250, 4, 'Benzina', 'Lant', 2014, NULL),
-    (235, 'D5204T', 'D5', 1969, 235, 4, 'Diesel', 'Curea', 2014, NULL),
-    -- Adăugate manual (păstrate din v13) pentru Fiesta VI 1.6 TDCi — coduri
-    -- reale primite de la utilizator, lipsesc din exportul consolidat:
-    (53, 'HHJC', '1.6 TDCi 90', 1560, 90, 4, 'Diesel', 'Curea', 2010, 2012),
-    (53, 'HHJD', '1.6 TDCi 90', 1560, 90, 4, 'Diesel', 'Curea', 2010, 2012),
-    (53, 'HHJE', '1.6 TDCi 90', 1560, 90, 4, 'Diesel', 'Curea', 2010, 2012),
-    (53, 'TZJA', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017),
-    (53, 'TZJB', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017),
-    (53, 'T1JA', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017),
-    (53, 'UBJA', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017)""",
-  // completează cheia normalizată de căutare (majuscule, fără spații/
-  // liniuțe/puncte) — aceeași normalizare ca `normalizeEngineCode`.
-  """UPDATE motoare SET cod_motor_key =
-    UPPER(REPLACE(REPLACE(REPLACE(cod_motor, ' ', ''), '-', ''), '.', ''))""",
+    (235, 'D5204T', 'D5', 1969, 235, 4, 'Diesel', 'Curea', 2014, NULL);
 
-  // ---------- Date: intervale_mentenanta (doar distributie) ----------
-  """INSERT INTO intervale_mentenanta (motor_id, componenta_id, interval_km, interval_luni, observatii) VALUES
+-- ============================================================================
+-- DATE: intervale_mentenanta
+-- Reguli SPECIFICE per motor. In principal pentru distributie (curea), unde
+-- intervalul variaza mult intre motoare si e critic sa nu se generalizeze.
+-- Restul componentelor mostenesc regula generica pe combustibil (vezi view-ul
+-- 'mentenanta_completa').
+-- ============================================================================
+INSERT INTO intervale_mentenanta (motor_id, componenta_id, interval_km, interval_luni, observatii) VALUES
     (1, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
     (2, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
     (3, 5, 90000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
@@ -2338,28 +2335,98 @@ const List<String> referenceDataStatements = [
     (754, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
     (755, 5, NULL, NULL, 'Lant de distributie: teoretic pe viata masinii, dar se verifica intinderea/uzura la fiecare revizie majora'),
     (756, 5, 210000, 120, 'Interval producator; se recomanda inlocuire anticipata daca istoricul e necunoscut'),
-    (756, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
-    -- Reguli distribuție pentru motoarele Fiesta 1.6 TDCi adăugate manual
-    -- mai sus (id 757-763) — estimare orientativă familia DV6:
-    (757, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
-    (757, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
-    (758, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
-    (758, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
-    (759, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
-    (759, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
-    (760, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
-    (760, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
-    (761, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
-    (761, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
-    (762, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
-    (762, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
-    (763, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
-    (763, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie')""",
-];
+    (756, 6, 210000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie');
 
-/// Normalizează un cod de motor (majuscule, fără spații/liniuțe/puncte) —
-/// aceeași regulă ca `UPDATE motoare SET cod_motor_key = ...` de mai sus, ca
-/// să se potrivească indiferent cum a fost introdus ("K9K 872", "k9k-872"...).
-String normalizeEngineCode(String engineCode) {
-  return engineCode.trim().toUpperCase().replaceAll(RegExp(r'[\s\-.]'), '');
-}
+-- ============================================================================
+-- INDEXURI suplimentare pentru interogari frecvente
+-- ============================================================================
+CREATE INDEX idx_modele_marca ON modele(marca_id);
+CREATE INDEX idx_motoare_model ON motoare(model_id);
+CREATE INDEX idx_motoare_combustibil ON motoare(combustibil);
+CREATE INDEX idx_intervale_motor ON intervale_mentenanta(motor_id);
+
+-- ============================================================================
+-- EXEMPLE DE INTEROGARI
+-- ============================================================================
+
+-- 1) Toate motorizarile disponibile pentru un model (indiferent de generatie), ex: Ford Fiesta
+-- SELECT mt.cod_motor, mt.denumire_comerciala, mt.combustibil, mt.tip_distributie,
+--        mt.an_start, mt.an_stop
+-- FROM motoare mt
+-- JOIN modele mo ON mo.id = mt.model_id
+-- JOIN marci ma ON ma.id = mo.marca_id
+-- WHERE ma.nume = 'Ford' AND mo.nume = 'Fiesta'
+-- ORDER BY mt.an_start;
+
+-- 2) Motorizari 1.6 disponibile pentru un model intr-un anumit an, ex: Fiesta 2010
+-- SELECT mt.cod_motor, mt.denumire_comerciala, mt.combustibil, mt.tip_distributie
+-- FROM motoare mt
+-- JOIN modele mo ON mo.id = mt.model_id
+-- JOIN marci ma ON ma.id = mo.marca_id
+-- WHERE ma.nume = 'Ford' AND mo.nume = 'Fiesta'
+--   AND 2010 BETWEEN mt.an_start AND COALESCE(mt.an_stop, 9999)
+--   AND mt.denumire_comerciala LIKE '%1.6%';
+
+-- 3) Toata mentenanta pentru un motor anume (specific + generic)
+-- SELECT * FROM mentenanta_completa
+-- WHERE marca = 'Volkswagen' AND model = 'Golf' AND cod_motor = 'DTVA';
+
+-- 4) Toate motorizarile cu distributie pe curea si intervalul lor de schimbare
+-- SELECT ma.nume AS marca, mo.nume AS model, mt.cod_motor, mt.denumire_comerciala,
+--        im.interval_km, im.interval_luni
+-- FROM motoare mt
+-- JOIN modele mo ON mo.id = mt.model_id
+-- JOIN marci ma ON ma.id = mo.marca_id
+-- JOIN intervale_mentenanta im ON im.motor_id = mt.id
+-- JOIN componente c ON c.id = im.componenta_id
+-- WHERE mt.tip_distributie = 'Curea' AND c.nume = 'Curea/lant de distributie'
+-- ORDER BY im.interval_km;
+
+-- ============================================================================
+-- NOTE
+-- ============================================================================
+/*
+1. STRUCTURA CONSOLIDATA (v2): fiecare nameplate (ex: "Fiesta", "Polo", "Golf")
+   apare o SINGURA data in tabelul `modele`, indiferent de cate generatii a avut
+   de-a lungul timpului. Toate motorizarile din toate generatiile sunt asociate
+   direct acelui model, in tabelul `motoare`, fiecare cu propriul an_start/
+   an_stop (asa afli exact in ce perioada a existat o motorizare anume, fara
+   sa mai fie nevoie sa stii/alegi generatia).
+
+2. ACOPERIRE: doar perioada 2005-prezent. Generatiile/motorizarile care s-au
+   incheiat definitiv inainte de 2005 au fost eliminate din baza de date.
+
+3. Cand doua generatii au folosit exact acelasi motor (cod + specificatii
+   identice), intervalul de ani a fost UNIT intr-un singur rand. Cand doua
+   generatii au folosit acelasi cod de baza dar cu tune-uri diferite (putere
+   diferita), au fost pastrate SEPARAT, cu codul disambiguat prin adaugarea
+   anului de inceput (ex: "D4HA/2010" vs "D4HA/2020") - astfel nu se pierde
+   nicio informatie reala.
+
+4. Aceasta baza de date NU este exhaustiva - contine gama principala de
+   modele pentru 26 de marci (Dacia, VW, BMW, Mercedes-Benz, Audi, Skoda,
+   Renault, Peugeot, Ford, Opel, Toyota, Honda, Hyundai, Kia, Volvo, Fiat,
+   Seat, Tesla, Mazda, Suzuki, Mitsubishi, Nissan, Citroen, Jeep, Land Rover,
+   Porsche).
+
+5. Intervalele de mentenanta sunt orientative, bazate pe recomandari tipice
+   de service auto independent. Pentru o masina reala, verifica mereu cartea
+   tehnica / carnetul de service al vehiculului respectiv.
+
+6. IMPORTANT - acuratetea codurilor de motor: motorizarile din aceasta baza
+   sunt introduse manual pe baza cunostintelor generale despre fiecare model/
+   generatie, dar NU sunt verificate individual cod-cu-cod fata de o baza de
+   date certificata a producatorului sau fata de VIN-uri reale. Pentru orice
+   decizie tehnica (schimb curea, piese, etc.) foloseste intotdeauna codul de
+   motor stantat pe bloc sau cel din talon/cartea de identitate a vehiculului
+   ca sursa finala de adevar. Un VIN complet NU poate fi decodat la
+   motorizarea exacta fara tabelul intern (needocumentat public) al
+   producatorului; interogarea corecta este marca+model+an (poate returna
+   mai multe motorizari posibile) sau, ideal, cod_motor exact.
+
+7. Portare pe alt SGBD:
+   - PostgreSQL: inlocuieste AUTO_INCREMENT cu GENERATED ALWAYS AS IDENTITY,
+     iar ENUM cu tip custom (CREATE TYPE) sau CHECK constraint pe VARCHAR.
+   - SQLite: elimina ENGINE=InnoDB, inlocuieste ENUM cu TEXT + CHECK,
+     AUTO_INCREMENT devine INTEGER PRIMARY KEY AUTOINCREMENT.
+*/

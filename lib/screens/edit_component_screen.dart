@@ -73,6 +73,22 @@ class _EditComponentScreenState extends State<EditComponentScreen> {
       record,
       widget.vehicleLabel,
     );
+    // Un `lastChangedMileage` nou schimbă imediat raportul km-parcurși/interval
+    // (spre deosebire de partea în luni, reprogramată mai sus) — verificăm
+    // acum, la fel ca la salvarea kilometrajului mașinii din
+    // `add_edit_vehicle_screen.dart`, altfel componenta poate intra direct în
+    // dueSoon/overdue fără nicio notificare.
+    final vehicle = await _db.getVehicle(widget.vehicleId);
+    if (vehicle != null) {
+      final records = await _db.getComponentRecords(widget.vehicleId);
+      final extraIds = await _db.getExtraComponentIds(widget.vehicleId);
+      // O editare directă e o introducere de date deliberată — resetăm
+      // deduplicarea ca utilizatorul să primească mereu un răspuns imediat
+      // despre noul status, chiar dacă e identic cu ultimul notificat.
+      await NotificationService.instance
+          .resetComponentNotificationState(widget.vehicleId, widget.definition.id);
+      await NotificationService.instance.checkComponentStatuses(vehicle, records, extraIds);
+    }
     if (!mounted) return;
     Navigator.pop(context);
   }

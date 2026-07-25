@@ -5,6 +5,7 @@ import '../l10n/strings.dart';
 import '../models/car_document.dart';
 import '../models/service_record.dart';
 import '../models/vehicle.dart';
+import '../services/notification_service.dart';
 import '../utils/alerts.dart';
 import '../utils/date_utils.dart';
 import '../widgets/document_tile.dart';
@@ -47,6 +48,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _allServiceRecords = records;
       _loading = false;
     });
+    // Re-programează reminder-ul lunar de kilometraj pentru toate mașinile —
+    // idempotent și necesar ca migrare pentru mașinile adăugate înainte de
+    // această funcționalitate (care altfel n-ar avea niciodată reminder-ul
+    // programat, fiindcă el pornește doar la salvarea din formular).
+    for (final vehicle in vehicles) {
+      await NotificationService.instance.scheduleMileageReminder(vehicle);
+    }
   }
 
   @override

@@ -174,6 +174,66 @@ class NotificationService {
     await _cancel(_idFor(reminderId, 0));
   }
 
+  /// Programează un reminder LUNAR recurent care încurajează utilizatorul să
+  /// introducă kilometrajul curent — necesar fiindcă partea în km a
+  /// intervalului componentelor nu se poate actualiza singură (spre
+  /// deosebire de partea în luni, vezi `scheduleComponentReminder`): dacă
+  /// utilizatorul nu mai deschide ecranul de editare a mașinii, statusul de
+  /// km rămâne înghețat la ultima valoare salvată. Repetă în fiecare lună,
+  /// în aceeași zi (ziua din `vehicle.createdAt`, limitată la 1-28 ca să
+  /// existe în toate lunile) la ora 9, via `matchDateTimeComponents:
+  /// dayOfMonthAndTime` — suportat nativ de plugin pe Android/iOS, nu
+  /// necesită re-programare manuală lunară. Idempotent: apelabilă oricând
+  /// (la creare mașină și la fiecare pornire a aplicației, ca reminder-ul să
+  /// existe și pentru mașini adăugate înainte de această funcționalitate).
+  Future<void> scheduleMileageReminder(Vehicle vehicle) async {
+    final day = vehicle.createdAt.day.clamp(1, 28);
+    final scheduled = _nextOccurrence(day, hour: 9);
+    try {
+      await _plugin.zonedSchedule(
+        _idFor(vehicle.id, 900),
+        S.mileageReminderTitle(vehicle.name),
+        S.mileageReminderBody,
+        scheduled,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'car_planner_reminders',
+            S.notificationChannelName,
+            channelDescription: S.notificationChannelDescription,
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: const DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.dayOfMonthAndTime,
+      );
+    } catch (_) {
+      // Idem restul serviciului: nu blocăm salvarea mașinii dacă
+      // plugin-ul de notificări eșuează.
+    }
+  }
+
+  Future<void> cancelMileageReminder(String vehicleId) async {
+    await _cancel(_idFor(vehicleId, 900));
+  }
+
+  /// Prima aparitie viitoare a zilei [day] din lună, la ora [hour] — punctul
+  /// de plecare pentru `matchDateTimeComponents: dayOfMonthAndTime` (care
+  /// preia de-aici doar componentele zi/oră și repetă lunar).
+  tz.TZDateTime _nextOccurrence(int day, {required int hour}) {
+    final now = tz.TZDateTime.now(tz.local);
+    var candidate = tz.TZDateTime(tz.local, now.year, now.month, day, hour);
+    if (candidate.isBefore(now)) {
+      final nextMonth = now.month == 12 ? 1 : now.month + 1;
+      final year = now.month == 12 ? now.year + 1 : now.year;
+      candidate = tz.TZDateTime(tz.local, year, nextMonth, day, hour);
+    }
+    return candidate;
+  }
+
   /// Programează notificări (recomandat curând + depășit) pentru o
   /// componentă din tabul Componente, bazate STRICT pe partea în luni a
   /// intervalului (dată ultimei schimbări + interval) — partea în km nu
@@ -215,6 +275,21 @@ class NotificationService {
     await _cancel(_idFor(key, 1));
   }
 
+  /// Șterge starea de deduplicare din `checkComponentStatuses` pentru o
+  /// componentă — de apelat înainte de acea verificare ori de câte ori
+  /// utilizatorul chiar a introdus date noi pentru componenta respectivă
+  /// (editare directă, bifă la revizie, profil de mentenanță aplicat).
+  /// Altfel, dacă noul status recalculat e IDENTIC cu ultimul notificat (ex.
+  /// tot "Recomandat curând", doar la un alt kilometraj), verificarea l-ar
+  /// considera "deja notificat" și ar sări peste — corect pentru salvări
+  /// repetate ale aceluiași kilometraj pe mașină, dar greșit când utilizatorul
+  /// chiar a înregistrat o schimbare reală și se așteaptă la un răspuns
+  /// imediat despre noul status.
+  Future<void> resetComponentNotificationState(String vehicleId, String componentId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('component_notified_${vehicleId}_$componentId');
+  }
+
   /// Verifică ACUM statusul tuturor componentelor mașinii (esențiale + extra
   /// legate) față de kilometrajul curent și trimite o notificare imediată
   /// (nu programată) pentru fiecare care tocmai a intrat în "Recomandat
@@ -248,7 +323,7 @@ class NotificationService {
       if (status == ComponentStatus.dueSoon || status == ComponentStatus.overdue) {
         final statusKey = status.name;
         if (lastNotified == statusKey) continue;
-        await _showNow(
+        final shown = await _showNow(
           _idFor('$prefKey|now', 0),
           status == ComponentStatus.overdue
               ? S.componentOverdueTitle(definition.name)
@@ -257,14 +332,22 @@ class NotificationService {
               ? S.componentOverdueBody(definition.name, vehicle.name)
               : S.componentDueSoonBody(definition.name, vehicle.name),
         );
-        await prefs.setString(prefKey, statusKey);
+        // Marcăm ca notificat DOAR dacă `_plugin.show` chiar a reușit — altfel
+        // un eșec silențios (permisiune neacordată, cache de notificări
+        // corupt) ar bloca PERMANENT orice notificare viitoare pentru acest
+        // status, fiindcă `lastNotified == statusKey` ar rămâne adevărat la
+        // infinit cât timp componenta nu iese din dueSoon/overdue.
+        if (shown) await prefs.setString(prefKey, statusKey);
       } else if (lastNotified != null) {
         await prefs.remove(prefKey);
       }
     }
   }
 
-  Future<void> _showNow(int id, String title, String body) async {
+  /// Întoarce `true` doar dacă `_plugin.show` chiar a reușit — apelantul
+  /// (`checkComponentStatuses`) folosește asta ca să NU marcheze o
+  /// componentă ca "notificată" când afișarea a eșuat silențios.
+  Future<bool> _showNow(int id, String title, String body) async {
     try {
       await _plugin.show(
         id,
@@ -281,9 +364,11 @@ class NotificationService {
           iOS: const DarwinNotificationDetails(),
         ),
       );
+      return true;
     } catch (_) {
       // Idem restul serviciului: nu blocăm fluxul utilizatorului dacă
       // plugin-ul de notificări eșuează.
+      return false;
     }
   }
 

@@ -194,6 +194,7 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
     final records = await _db.getComponentRecords(vehicle.id);
     final extraIds = await _db.getExtraComponentIds(vehicle.id);
     await NotificationService.instance.checkComponentStatuses(vehicle, records, extraIds);
+    await NotificationService.instance.scheduleMileageReminder(vehicle);
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -216,6 +217,7 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
     );
     if (confirmed != true) return;
     await _db.deleteVehicle(widget.vehicle!.id);
+    await NotificationService.instance.cancelMileageReminder(widget.vehicle!.id);
     if (!mounted) return;
     Navigator.pop(context);
     Navigator.pop(context);

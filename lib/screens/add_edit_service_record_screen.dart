@@ -122,6 +122,16 @@ class _AddEditServiceRecordScreenState extends State<AddEditServiceRecordScreen>
     await NotificationService.instance.scheduleServiceReminder(record, widget.vehicle.name);
     await _syncChangedComponents(mileage);
 
+    // La fel ca la editarea directă a unei componente — bifele de mai sus
+    // schimbă `lastChangedMileage`/`lastChangedDate`, deci raportul km/lună
+    // al componentelor NEbifate (relativ la kilometrajul mașinii) se poate
+    // schimba și el dacă revizia a fost înregistrată la un kilometraj diferit
+    // de cel curent salvat pe mașină.
+    final records = await _db.getComponentRecords(widget.vehicle.id);
+    final extraIds = await _db.getExtraComponentIds(widget.vehicle.id);
+    await NotificationService.instance
+        .checkComponentStatuses(widget.vehicle, records, extraIds);
+
     if (!mounted) return;
     Navigator.pop(context);
   }
@@ -143,6 +153,11 @@ class _AddEditServiceRecordScreenState extends State<AddEditServiceRecordScreen>
         customIntervalSource: existing?.customIntervalSource,
       );
       await _db.upsertComponentRecord(record);
+      // Bifarea componentei e o introducere de date deliberată — resetăm
+      // deduplicarea din `checkComponentStatuses` (apelat mai sus, după acest
+      // loop) ca un nou status identic cu ultimul notificat tot să anunțe.
+      await NotificationService.instance
+          .resetComponentNotificationState(widget.vehicle.id, componentId);
       final definition = findComponentDefinition(componentId);
       if (definition != null) {
         await NotificationService.instance.scheduleComponentReminder(

@@ -22,7 +22,7 @@ class CarPlannerApp extends StatelessWidget {
       builder: (context, countryCode, _) {
         return MaterialApp(
           key: ValueKey(countryCode),
-          title: 'CarPlanner',
+          title: 'Auto Calendar',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             useMaterial3: true,

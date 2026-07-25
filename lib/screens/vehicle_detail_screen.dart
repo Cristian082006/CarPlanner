@@ -264,6 +264,11 @@ class _InfoTab extends StatelessWidget {
             customIntervalSource: engineDisplayName,
           );
           await db.upsertComponentRecord(updatedRecord);
+          // Aplicarea profilului e o introducere de date deliberată —
+          // resetăm deduplicarea ca verificarea de mai jos să anunțe chiar
+          // dacă noul status e identic cu ultimul notificat.
+          await NotificationService.instance
+              .resetComponentNotificationState(vehicle.id, componentId);
           final definition = findComponentDefinition(componentId);
           if (definition != null) {
             await NotificationService.instance
@@ -286,6 +291,8 @@ class _InfoTab extends StatelessWidget {
           customIntervalSource: fallbackProfile.displayName,
         );
         await db.upsertComponentRecord(updatedRecord);
+        await NotificationService.instance
+            .resetComponentNotificationState(vehicle.id, componentId);
         final definition = findComponentDefinition(componentId);
         if (definition != null) {
           await NotificationService.instance
@@ -301,6 +308,16 @@ class _InfoTab extends StatelessWidget {
         addedCount++;
       }
     }
+
+    // Un interval custom nou (`customIntervalKm`/`customIntervalMonths`) poate
+    // schimba imediat raportul km-parcurși/interval al unei componente chiar
+    // fără nicio schimbare de `lastChangedMileage` — ex. de la 90.000 km
+    // generic la 60.000 km specific motorului, cu o mașină deja la 55.000 km
+    // de la ultima schimbare. La fel ca la editarea directă a unei
+    // componente, verificăm acum dacă vreuna a intrat în dueSoon/overdue.
+    final refreshedRecords = await db.getComponentRecords(vehicle.id);
+    await NotificationService.instance
+        .checkComponentStatuses(vehicle, refreshedRecords, existingExtras);
 
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

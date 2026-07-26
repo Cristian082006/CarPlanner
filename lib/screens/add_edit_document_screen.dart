@@ -5,6 +5,7 @@ import '../db/database_helper.dart';
 import '../l10n/strings.dart';
 import '../models/car_document.dart';
 import '../models/vehicle.dart';
+import '../services/document_scanner_service.dart';
 import '../services/notification_service.dart';
 import '../utils/constants.dart';
 import '../utils/date_utils.dart';
@@ -36,10 +37,12 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
   String? _photoPath;
   bool _saving = false;
+  bool _expiryDateTouched = false;
   Vehicle? _vehicle;
 
   bool get _isEditing => widget.document != null;
   bool get _isForVehicle => widget.vehicleId != null;
+  bool get _isPolicyType => _type == DocumentType.rca || _type == DocumentType.casco;
 
   List<DocumentType> get _availableTypes => _isForVehicle
       ? [DocumentType.rca, DocumentType.casco, DocumentType.rovinieta, DocumentType.itp, DocumentType.other]
@@ -57,6 +60,7 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
     _notesCtrl = TextEditingController(text: d?.notes ?? '');
     _startDate = d?.startDate;
     _expiryDate = d?.expiryDate ?? _expiryDate;
+    _expiryDateTouched = d != null;
     _photoPath = d?.photoPath;
     if (widget.vehicleId != null) _loadVehicle();
   }
@@ -91,8 +95,39 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
         _startDate = picked;
       } else {
         _expiryDate = picked;
+        _expiryDateTouched = true;
       }
     });
+  }
+
+  Future<void> _tryAutoFillFromPdf(String path) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(S.extractingPdfData), duration: const Duration(seconds: 2)),
+    );
+
+    final data = await DocumentScannerService.instance.scanRcaPdf(path);
+    if (!mounted || data == null) return;
+
+    if (_providerCtrl.text.trim().isEmpty && data.provider != null) {
+      _providerCtrl.text = data.provider!;
+    }
+    if (_policyCtrl.text.trim().isEmpty && data.policyNumber != null) {
+      _policyCtrl.text = data.policyNumber!;
+    }
+    setState(() {
+      if (_startDate == null && data.startDate != null) _startDate = data.startDate;
+      if (!_expiryDateTouched && data.expiryDate != null) {
+        _expiryDate = data.expiryDate!;
+        _expiryDateTouched = true;
+      }
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(data.fieldsFound > 0 ? S.pdfDataFilled(data.fieldsFound) : S.pdfDataNotFound),
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -246,8 +281,14 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
             const SizedBox(height: 12),
             PhotoPickerField(
               initialPath: _photoPath,
-              label: S.documentPhoto,
-              onChanged: (path) => _photoPath = path,
+              label: _isPolicyType ? S.documentPhotoOrPdf : S.documentPhoto,
+              allowPdf: true,
+              onChanged: (path) {
+                _photoPath = path;
+                if (path != null && path.toLowerCase().endsWith('.pdf') && _isPolicyType) {
+                  _tryAutoFillFromPdf(path);
+                }
+              },
             ),
             const SizedBox(height: 24),
             FilledButton(

@@ -88,10 +88,16 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   in-memory: numărare rânduri, verificare perechi H/L, query-uri Fiesta/Golf/Polo) — preferă
   aceeași abordare la o viitoare actualizare, în locul copierii manuale.
 - Notificări locale: `flutter_local_notifications` + `timezone`.
-- OCR pe device (gratuit): `google_mlkit_text_recognition`, folosit pentru scanarea talonului auto.
+- OCR pe device (gratuit): `google_mlkit_text_recognition`, folosit pentru scanarea talonului auto
+  și, pe lângă asta, pentru extragerea best-effort a datelor dintr-o poliță RCA/CASCO atașată ca PDF.
 - Calendar: `add_2_calendar` (necesită permisiuni `READ_CALENDAR`/`WRITE_CALENDAR` +
   `<queries>` pentru `ACTION_INSERT` în AndroidManifest).
 - Poze: `image_picker` (cameră + galerie).
+- Atașament PDF documente (RCA/CASCO): `file_picker` (selectare fișier), `printing`
+  (`Printing.raster` — randează prima pagină a PDF-ului ca imagine pentru OCR, fără viewer
+  nativ), `open_filex` (deschide PDF-ul cu viewer-ul implicit al telefonului). PDF-ul e stocat
+  în aceeași coloană `photoPath` folosită și pentru poze (fără migrație DB) — UI-ul distinge
+  poză vs. PDF după extensia fișierului (`.pdf`).
 - i18n: sistem propriu, lightweight (NU `flutter_localizations`/ARB) — clasa statică `S` din
   `lib/l10n/strings.dart`.
 - Iconița aplicației (design "Auto Calendar" — calendar cu header roșu "AUTO", cifra "24" și o
@@ -293,6 +299,25 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     ștergerea mașinii, și re-programat (idempotent) pentru toate mașinile la fiecare încărcare a
     `HomeScreen` — ultimul e migrarea pentru mașinile adăugate înainte de această funcționalitate,
     care altfel n-ar avea niciodată reminder-ul programat.
+14. Atașare PDF la un document RCA/CASCO (`PhotoPickerField` cu `allowPdf: true`, folosit doar din
+    `add_edit_document_screen.dart`) — utilizatorul poate atașa PDF-ul poliței deja cumpărate, ca
+    să-l poată arăta unui polițist offline. Stocat în `photoPath` (reutilizat, fără migrație DB);
+    `DocumentTile` arată un buton dedicat „Deschide PDF" (via `open_filex`) când `photoPath` se
+    termină în `.pdf`. La atașare pe un document de tip `rca`/`casco`,
+    `DocumentScannerService.scanRcaPdf` randează prima pagină ca imagine (`printing`'s
+    `Printing.raster`, doar pagina 0 — polițele RCA pun asigurătorul/seria/valabilitatea pe prima
+    pagină) și rulează același OCR (`google_mlkit_text_recognition`) folosit pentru talon, apoi
+    `parseRcaText` extrage asigurătorul, seria/numărul poliței și valabilitatea. Regexurile au fost
+    reglate pe o poliță RCA reală (HD Insurance/Hellas Direct) trimisă de utilizator — formatul
+    "Seria RO/32/V32/LM Nr. 1100737277" și "Valabilitate Contract de la DD/MM/YYYY până la
+    DD/MM/YYYY" par să vină dintr-un șablon standardizat A.S.F., deci sunt tratate ca pattern-uri
+    primare (nu doar euristici generice); pentru asigurător e încercată întâi lista
+    `_knownInsurers`, apoi fallback pe eticheta „DENUMIRE ASIGURĂTOR:" (tăiată la primul marker
+    cunoscut — R.C./C.U.I./Sucursală etc. — ca să nu înghită și câmpurile următoare de pe același
+    rând). Best-effort ca la codul de motor din VIN: completează DOAR câmpurile goale din formular
+    (nu suprascrie ce a completat userul), nu blochează niciodată atașarea PDF-ului dacă OCR-ul
+    eșuează sau nu găsește nimic. Test de regresie cu textul real:
+    `test/document_scanner_service_test.dart` (`group('parseRcaText', ...)`).
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

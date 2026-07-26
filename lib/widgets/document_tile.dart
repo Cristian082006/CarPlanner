@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 
 import '../l10n/strings.dart';
 import '../models/car_document.dart';
@@ -27,6 +28,7 @@ class DocumentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pdfPath = document.photoPath?.toLowerCase().endsWith('.pdf') == true ? document.photoPath : null;
     final days = document.daysUntilExpiry;
     Color badgeColor;
     if (document.isExpired) {
@@ -71,6 +73,25 @@ class DocumentTile extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (pdfPath != null)
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                    tooltip: S.openPdf,
+                    onPressed: () async {
+                      final result = await OpenFilex.open(pdfPath);
+                      if (result.type != ResultType.done && context.mounted) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(SnackBar(content: Text(S.openPdfFailed)));
+                      }
+                    },
+                  ),
+                ),
               if (hasOfficialVerification(document.type))
                 SizedBox(
                   width: 28,

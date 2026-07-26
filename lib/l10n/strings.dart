@@ -159,6 +159,8 @@ class S {
   static String get startDateOptional => _ro ? 'Data început — opțional' : 'Start date — optional';
   static String get expiryDate => _ro ? 'Data expirării' : 'Expiry date';
   static String get documentPhoto => _ro ? 'Poză document / poliță' : 'Document / policy photo';
+  static String get documentPhotoOrPdf =>
+      _ro ? 'Poză sau PDF document / poliță' : 'Document / policy photo or PDF';
   static String get verifyOnOfficialSite =>
       _ro ? 'Verifică pe site-ul oficial' : 'Check on official site';
   static String get plateNumberLabel => _ro ? 'Nr. înmatriculare' : 'Plate number';
@@ -237,6 +239,18 @@ class S {
   static String get validUntil => _ro ? 'Valabil până la ' : 'Valid until ';
   static String get saveToCalendar => _ro ? 'Salvează în calendar' : 'Save to calendar';
   static String get attachPhoto => _ro ? 'Atașează o poză' : 'Attach a photo';
+  static String get attachPdf => _ro ? 'Document PDF' : 'PDF document';
+  static String get pdfAttachedLabel => _ro ? 'PDF atașat' : 'PDF attached';
+  static String get openPdf => _ro ? 'Deschide PDF' : 'Open PDF';
+  static String get openPdfFailed =>
+      _ro ? 'Nu am putut deschide PDF-ul.' : 'Couldn\'t open the PDF.';
+  static String get extractingPdfData =>
+      _ro ? 'Se citesc datele din PDF...' : 'Reading data from PDF...';
+  static String pdfDataFilled(int count) => _ro
+      ? 'Am completat $count ${count == 1 ? 'câmp' : 'câmpuri'} din PDF — verifică datele.'
+      : 'Filled $count ${count == 1 ? 'field' : 'fields'} from the PDF — please double-check.';
+  static String get pdfDataNotFound =>
+      _ro ? 'Nu am găsit date în PDF — completează manual.' : 'No data found in the PDF — please fill in manually.';
 
   // ---------- Date / expiry wording ----------
   static String expiredAgo(int days) =>

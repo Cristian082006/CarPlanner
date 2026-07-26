@@ -157,4 +157,47 @@ E WVWZZZ9NZ9Y024262
     expect(result.plateNumber, 'IS15CPI');
     expect(result.vin, 'WVWZZZ9NZ9Y024262');
   });
+
+  group('parseRcaText', () {
+    // Text extras (pdftotext -layout) de pe prima pagină a unei polițe RCA
+    // reale, emisă de HD Insurance (Hellas Direct) — trimis de utilizator ca
+    // să reglez extracția pe un document adevărat, nu doar pe presupuneri.
+    const realRcaFirstPageText = '''
+CONTRACT DE ASIGURARE DE RĂSPUNDERE CIVILĂ AUTO RCA                                                                                                                     Seria RO/32/V32/LM Nr. 1100737277
+DENUMIRE ASIGURĂTOR: HD INSURANCE PLC NICOSIA – SUCURSALA BUCURESTI                                                                                                                     R.C. J40/13826/2022 C.U.I. 46500594
+Sucursala / Agenția: BUCUREȘTI                                                                                                                                Denumire broker / agent: PINT.RO BROKER DE ASIGURARE SRL
+Tel/Fax: +40376448858 /                                                                                                                                                                        Cod broker / agent: RBK - 569
+
+Valabilitate Contract de la 07/04/2026 până la 06/04/2027 Contract emis în data de 06/04/2026, ora 14:16 Prima de asigurare 1.152,37 RON, Prima decontare
+directă 0,00 RON, Prima totală 1.152,37 RON Nr. rate 1, după cum urmează: Rata 1: 1.152,37 RON, la 06/04/2026, Clasa Bonus-Malus B5 Încasată cu numerar în data de
+06/04/2026
+''';
+
+    test('extracts provider, policy number and validity dates from a real RCA policy', () {
+      final result = scanner.parseRcaText(realRcaFirstPageText);
+
+      expect(result.provider, 'HD Insurance');
+      expect(result.policyNumber, 'RO/32/V32/LM 1100737277');
+      expect(result.startDate, DateTime(2026, 4, 7));
+      expect(result.expiryDate, DateTime(2027, 4, 6));
+    });
+
+    test('falls back to the label-based provider extraction for an unlisted insurer', () {
+      final result = scanner.parseRcaText(
+        'DENUMIRE ASIGURĂTOR: SOME NEW INSURER SA                    R.C. J40/1/2020 C.U.I. 123',
+      );
+
+      expect(result.provider, 'SOME NEW INSURER SA');
+    });
+
+    test('falls back gracefully on unrelated text', () {
+      final result = scanner.parseRcaText('random unrelated text with no policy data');
+
+      expect(result.provider, isNull);
+      expect(result.policyNumber, isNull);
+      expect(result.startDate, isNull);
+      expect(result.expiryDate, isNull);
+      expect(result.fieldsFound, 0);
+    });
+  });
 }

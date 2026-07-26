@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 
 /// Date extrase dintr-o poză a talonului (certificatul de înmatriculare).
 /// Orice câmp poate lipsi dacă OCR-ul nu l-a putut recunoaște — utilizatorul
@@ -22,6 +26,29 @@ class ScannedVehicleData {
 
   int get fieldsFound =>
       [make, model, vin, plateNumber, engineCode].where((v) => v != null).length;
+}
+
+/// Date extrase din prima pagină a unui PDF de poliță RCA/CASCO. La fel ca
+/// [ScannedVehicleData], orice câmp poate lipsi — formatul diferă mult între
+/// asigurători, deci extracția e best-effort; utilizatorul revede și
+/// corectează întotdeauna înainte de salvare.
+class ScannedRcaData {
+  final String? provider;
+  final String? policyNumber;
+  final DateTime? startDate;
+  final DateTime? expiryDate;
+  final String rawText;
+
+  ScannedRcaData({
+    this.provider,
+    this.policyNumber,
+    this.startDate,
+    this.expiryDate,
+    required this.rawText,
+  });
+
+  int get fieldsFound =>
+      [provider, policyNumber, startDate, expiryDate].where((v) => v != null).length;
 }
 
 /// Recunoaște text de pe o poză a talonului folosind Google ML Kit (rulează
@@ -224,5 +251,210 @@ class DocumentScannerService {
       engineCode: engineCode,
       rawText: rawText,
     );
+  }
+
+  // ---------- Scanare PDF poliță RCA/CASCO ----------
+
+  static const List<String> _knownInsurers = [
+    'Allianz-Țiriac', 'Allianz Tiriac', 'Allianz', 'Groupama', 'OMNIASIG VIG', 'Omniasig',
+    'Euroins', 'City Insurance', 'Grawe', 'Generali', 'Asirom', 'Uniqa', 'NN Asigurări',
+    'NN Asigurari', 'Axeria', 'Certasig', 'Gothaer', 'Hellas Direct', 'HD Insurance',
+  ];
+
+  /// Eticheta standardizată de pe contractele RCA din România (șablon impus
+  /// de A.S.F., verificat pe o poliță reală Hellas Direct/HD Insurance):
+  /// "DENUMIRE ASIGURĂTOR: {nume}" urmat, pe același rând, de alte câmpuri
+  /// (R.C., C.U.I. etc.) — folosit ca fallback dacă numele nu e pe lista
+  /// [_knownInsurers] (asigurători noi/mai puțin cunoscuți).
+  static final RegExp _providerLabel = RegExp(r'denumire\s*asigur[aă]tor\s*:?', caseSensitive: false);
+  static final RegExp _providerCutMarker = RegExp(
+    r'\bR\.?\s*C\.?\b|\bC\.?\s*U\.?\s*I\.?\b|\bSucursal[aă]\b|\bAgen[țt]i[ae]\b|\bTel\b|\bCod\s+broker\b',
+    caseSensitive: false,
+  );
+
+  /// Formatul standard al identificatorului de poliță RCA din România:
+  /// "Seria RO/32/V32/LM Nr. 1100737277" — verificat pe o poliță reală,
+  /// prioritar față de etichetele generice de mai jos.
+  static final RegExp _policyNumberSeriaNr = RegExp(
+    r'\bseria\s+([A-Z]{1,4}(?:\/[A-Za-z0-9]{1,6}){1,4})\s+nr\.?\s*(\d{4,15})\b',
+    caseSensitive: false,
+  );
+  static final RegExp _policyNumberLabel = RegExp(
+    r'\bserie\s*(?:și|si)?\s*num[aă]r\b|\bnr\.?\s*poli[țt][aă]\b|\bseria\s*/?\s*num[aă]rul?\s*poli[țt]ei\b',
+    caseSensitive: false,
+  );
+  static final RegExp _policyNumberValue = RegExp(r'^[A-Z0-9][A-Z0-9\-\/]{3,20}$', caseSensitive: false);
+
+  /// "Valabilitate Contract de la {dată} până la {dată}" — fraza standard de
+  /// pe contractele RCA (verificat pe o poliță reală); "de la"/"până la" pot
+  /// apărea pe același rând, deci data e căutată DUPĂ poziția etichetei, nu
+  /// doar prima dată găsită pe rând (altfel eticheta de expirare ar prelua
+  /// greșit data de început).
+  static final RegExp _startDateLabel = RegExp(
+    r'valabil\w*\s*(?:contract\s*)?de\s*la\b|data\s*(?:de\s*)?(?:început|inceput)ii?\b|inceput\s*valabilitate',
+    caseSensitive: false,
+  );
+  static final RegExp _expiryDateLabel = RegExp(
+    r'p[aâ]n[aă]\s*la\b|data\s*expir[aă]rii\b|sf[aâ]r[șs]it\s*valabilitate',
+    caseSensitive: false,
+  );
+  static final RegExp _datePattern = RegExp(r'\b(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})\b');
+
+  /// Fallback pentru Cartea Verde (formatul internațional standardizat
+  /// BAAR, prezent pe toate polițele RCA din România): data e tipărită pe
+  /// coloane separate Ziua/Luna/Anul de două ori la rând (început, apoi
+  /// expirare), nu ca text compact "dd.mm.yyyy" — caută 6 numere apropiate
+  /// lângă cuvântul "valabil" ca ultimă soluție, dacă etichetele de mai sus
+  /// n-au găsit nimic.
+  static final RegExp _greenCardDatesPattern = RegExp(
+    r'\b(\d{1,2})\D{1,4}(\d{1,2})\D{1,4}(\d{4})\D{1,15}(\d{1,2})\D{1,4}(\d{1,2})\D{1,4}(\d{4})\b',
+  );
+
+  DateTime? _parseDate(String raw) {
+    final m = _datePattern.firstMatch(raw);
+    if (m == null) return null;
+    final day = int.tryParse(m.group(1)!);
+    final month = int.tryParse(m.group(2)!);
+    final year = int.tryParse(m.group(3)!);
+    if (day == null || month == null || year == null) return null;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return DateTime(year, month, day);
+  }
+
+  /// Funcție pură de parsare a textului recunoscut pe prima pagină a unei
+  /// polițe RCA/CASCO — separată de OCR ca să poată fi testată cu text
+  /// simulat, la fel ca [parseTalonText].
+  ScannedRcaData parseRcaText(String rawText) {
+    final lines = rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+
+    String? provider;
+    for (final candidate in _knownInsurers) {
+      final regex = RegExp(RegExp.escape(candidate), caseSensitive: false);
+      if (regex.hasMatch(rawText)) {
+        provider = candidate;
+        break;
+      }
+    }
+    if (provider == null) {
+      for (var i = 0; i < lines.length; i++) {
+        final m = _providerLabel.firstMatch(lines[i]);
+        if (m == null) continue;
+        var rest = lines[i].substring(m.end).trim();
+        if (rest.isEmpty && i + 1 < lines.length) rest = lines[i + 1].trim();
+        final cutMatch = _providerCutMarker.firstMatch(rest);
+        if (cutMatch != null) rest = rest.substring(0, cutMatch.start).trim();
+        if (rest.isNotEmpty && rest.length <= 80) provider = rest;
+        break;
+      }
+    }
+
+    String? policyNumber;
+    final seriaNrMatch = _policyNumberSeriaNr.firstMatch(rawText);
+    if (seriaNrMatch != null) {
+      policyNumber = '${seriaNrMatch.group(1)} ${seriaNrMatch.group(2)}'.toUpperCase();
+    } else {
+      for (var i = 0; i < lines.length; i++) {
+        if (!_policyNumberLabel.hasMatch(lines[i])) continue;
+        final sameLine = lines[i].replaceFirst(_policyNumberLabel, '').replaceFirst(RegExp(r'^[:\-\s]+'), '').trim();
+        if (_policyNumberValue.hasMatch(sameLine)) {
+          policyNumber = sameLine.toUpperCase();
+        } else if (i + 1 < lines.length && _policyNumberValue.hasMatch(lines[i + 1])) {
+          policyNumber = lines[i + 1].toUpperCase();
+        }
+        break;
+      }
+    }
+
+    DateTime? startDate;
+    DateTime? expiryDate;
+    for (var i = 0; i < lines.length; i++) {
+      final startMatch = _startDateLabel.firstMatch(lines[i]);
+      if (startDate == null && startMatch != null) {
+        startDate = _parseDate(lines[i].substring(startMatch.end)) ??
+            (i + 1 < lines.length ? _parseDate(lines[i + 1]) : null);
+      }
+      final expiryMatch = _expiryDateLabel.firstMatch(lines[i]);
+      if (expiryDate == null && expiryMatch != null) {
+        expiryDate = _parseDate(lines[i].substring(expiryMatch.end)) ??
+            (i + 1 < lines.length ? _parseDate(lines[i + 1]) : null);
+      }
+    }
+
+    // Fallback Cartea Verde: 6 numere apropiate (ziua/luna/anul repetat de
+    // două ori) lângă cuvântul "valabil" — vezi comentariul de la
+    // [_greenCardDatesPattern].
+    if (startDate == null && expiryDate == null) {
+      final keywordIdx = RegExp(r'valabil', caseSensitive: false).firstMatch(rawText)?.start;
+      if (keywordIdx != null) {
+        final windowEnd = keywordIdx + 600 > rawText.length ? rawText.length : keywordIdx + 600;
+        final window = rawText.substring(keywordIdx, windowEnd);
+        final m = _greenCardDatesPattern.firstMatch(window);
+        if (m != null) {
+          final d1 = int.tryParse(m.group(1)!);
+          final mo1 = int.tryParse(m.group(2)!);
+          final y1 = int.tryParse(m.group(3)!);
+          final d2 = int.tryParse(m.group(4)!);
+          final mo2 = int.tryParse(m.group(5)!);
+          final y2 = int.tryParse(m.group(6)!);
+          if (d1 != null && mo1 != null && y1 != null && d2 != null && mo2 != null && y2 != null &&
+              mo1 >= 1 && mo1 <= 12 && mo2 >= 1 && mo2 <= 12 && d1 >= 1 && d1 <= 31 && d2 >= 1 && d2 <= 31) {
+            startDate = DateTime(y1, mo1, d1);
+            expiryDate = DateTime(y2, mo2, d2);
+          }
+        }
+      }
+    }
+
+    // Fără etichete recunoscute: dacă apar exact 2 date în tot textul,
+    // presupunem că sunt începutul/sfârșitul valabilității (cea mai mică →
+    // start, cea mai mare → expiry) — fallback slab, dar mai bun decât nimic.
+    if (startDate == null && expiryDate == null) {
+      final allDates = _datePattern.allMatches(rawText).map((m) => _parseDate(m.group(0)!)).whereType<DateTime>().toSet().toList();
+      if (allDates.length == 2) {
+        allDates.sort();
+        startDate = allDates.first;
+        expiryDate = allDates.last;
+      }
+    }
+
+    return ScannedRcaData(
+      provider: provider,
+      policyNumber: policyNumber,
+      startDate: startDate,
+      expiryDate: expiryDate,
+      rawText: rawText,
+    );
+  }
+
+  /// Randează prima pagină a PDF-ului ca imagine și rulează același OCR
+  /// folosit pentru talon. Doar pagina 0 e citită — polițele RCA/CASCO pun
+  /// asigurătorul, seria poliței și valabilitatea pe prima pagină, deci e un
+  /// compromis rezonabil, nu o limitare care blochează funcționalitatea.
+  /// Best-effort: orice eroare (PDF corupt, randare eșuată, OCR indisponibil)
+  /// întoarce `null` în loc să propage excepția — atașarea PDF-ului rămâne
+  /// validă indiferent de rezultatul extracției.
+  Future<ScannedRcaData?> scanRcaPdf(String pdfPath) async {
+    try {
+      final bytes = await File(pdfPath).readAsBytes();
+      final page = await Printing.raster(bytes, pages: const [0], dpi: 150).first;
+      final png = await page.toPng();
+
+      final tmpDir = await getTemporaryDirectory();
+      final tmpPath = '${tmpDir.path}/rca_ocr_${DateTime.now().microsecondsSinceEpoch}.png';
+      final tmpFile = File(tmpPath);
+      await tmpFile.writeAsBytes(png);
+
+      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      try {
+        final inputImage = InputImage.fromFilePath(tmpPath);
+        final result = await recognizer.processImage(inputImage);
+        return parseRcaText(result.text);
+      } finally {
+        await recognizer.close();
+        if (await tmpFile.exists()) await tmpFile.delete();
+      }
+    } catch (_) {
+      return null;
+    }
   }
 }

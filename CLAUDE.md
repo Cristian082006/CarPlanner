@@ -317,8 +317,9 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     rând). Best-effort ca la codul de motor din VIN: nu blochează niciodată atașarea PDF-ului dacă
     OCR-ul eșuează sau nu găsește nimic. Test de regresie cu textul real:
     `test/document_scanner_service_test.dart` (`group('parseRcaText', ...)`).
-    **Trei bug-uri reale găsite și fixate testând pe un PDF real trimis de utilizator (nu doar pe
-    text extras cu `pdftotext`, care ascunde primele două):**
+    **Cinci bug-uri reale găsite și fixate testând pe DOUĂ polițe RCA reale trimise de utilizator,
+    de la asigurători diferiți (Hellas Direct/HD Insurance și Anytime/Interamerican Hellenic) — nu
+    doar pe text extras cu `pdftotext`, care ascunde toate:**
     - **Fundal transparent la randare**: pe iOS, `Printing.raster` întoarce pixeli RGBA cu fundal
       TRANSPARENT (pagina PDF nu are un fill alb opac) — trimisă ca atare la ML Kit, transparența
       se decodează ca negru, iar textul negru pe „negru" devine ilizibil (OCR găsea 0 caractere,
@@ -338,6 +339,21 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
       flag-ul pornește mereu `false`, devine `true` doar când userul chiar deschide manual
       date-picker-ul de expirare (`_pickDate(isStart: false)`) — deci completarea din PDF poate
       suprascrie o dată neatinsă manual, dar nu una aleasă explicit de user în sesiunea curentă.
+    - **A doua poliță reală testată (Anytime/Interamerican Hellenic) nu completa data de
+      început**: eticheta `_startDateLabel` cere „valabil" + „de la" pe același rând — pe acest
+      PDF OCR-ul n-a mai recunoscut deloc cuvântul „Valabilitate" (cuvânt lung, predispus la
+      erori), deci eticheta nu se potrivea, deși „până la" (fără nicio dependență de „valabil")
+      tot a funcționat. Fix: dacă eticheta de expirare s-a găsit dar cea de început nu, ultima
+      dată găsită ÎNAINTE de „până la" pe același rând e folosită direct ca dată de început —
+      funcționează indiferent dacă eticheta „de la" a supraviețuit OCR-ului sau nu.
+    - **Aceeași poliță nu completa numele asigurătorului**: acest asigurător nu folosește deloc
+      eticheta „DENUMIRE ASIGURĂTOR:” (spre deosebire de Hellas Direct) — numele apare direct pe
+      rândul de după antetul „CONTRACT DE ASIGURARE DE RĂSPUNDERE CIVILĂ AUTO RCA”. Fix: fallback
+      pozițional suplimentar care caută acest antet și ia rândul următor ca nume asigurător (cu
+      aceeași logică de tăiere la markeri cunoscuți). **Atenție**: markerul de tăiere „Sucursală”
+      a fost eliminat din `_providerCutMarker` — pe această poliță „SUCURSALA BUCUREȘTI” e parte
+      din numele legal propriu-zis al asigurătorului („...ATENA - SUCURSALA BUCUREȘTI”), nu
+      eticheta unui câmp următor; păstrarea lui trunchia numele la jumătate.
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

@@ -268,8 +268,13 @@ class DocumentScannerService {
   /// (R.C., C.U.I. etc.) — folosit ca fallback dacă numele nu e pe lista
   /// [_knownInsurers] (asigurători noi/mai puțin cunoscuți).
   static final RegExp _providerLabel = RegExp(r'denumire\s*asigur[aă]tor\s*:?', caseSensitive: false);
+  // NU include "Sucursală/Sucursala" — pare un separator de câmp potrivit,
+  // dar unii asigurători (verificat pe o poliță reală Anytime/Interamerican
+  // Hellenic) au chiar "SUCURSALA BUCUREȘTI" ca parte a numelui legal
+  // propriu-zis, nu ca eticheta unui câmp următor — tăierea pe acel cuvânt
+  // trunchia numele asigurătorului la jumătate.
   static final RegExp _providerCutMarker = RegExp(
-    r'\bR\.?\s*C\.?\b|\bC\.?\s*U\.?\s*I\.?\b|\bSucursal[aă]\b|\bAgen[țt]i[ae]\b|\bTel\b|\bCod\s+broker\b',
+    r'\bR\.?\s*C\.?\b|\bC\.?\s*U\.?\s*I\.?\b|\bAgen[țt]i[ae]\b|\bTel\b|\bCod\s+broker\b',
     caseSensitive: false,
   );
 
@@ -352,6 +357,23 @@ class DocumentScannerService {
         break;
       }
     }
+    // Fallback pozițional: unii asigurători (verificat pe o poliță reală
+    // Anytime/Interamerican Hellenic) nu au deloc eticheta „DENUMIRE
+    // ASIGURĂTOR:" — numele apare direct pe rândul de după antetul
+    // "CONTRACT DE ASIGURARE DE RĂSPUNDERE CIVILĂ AUTO RCA".
+    if (provider == null) {
+      final headerIdx =
+          lines.indexWhere((l) => RegExp(r'contract\s+de\s+asigurare', caseSensitive: false).hasMatch(l));
+      if (headerIdx != -1 && headerIdx + 1 < lines.length) {
+        var candidate = lines[headerIdx + 1];
+        final labelMatch = _providerLabel.firstMatch(candidate);
+        if (labelMatch != null) candidate = candidate.substring(labelMatch.end);
+        final cutMatch = _providerCutMarker.firstMatch(candidate);
+        if (cutMatch != null) candidate = candidate.substring(0, cutMatch.start);
+        candidate = candidate.trim();
+        if (candidate.isNotEmpty && candidate.length <= 80) provider = candidate;
+      }
+    }
 
     String? policyNumber;
     final seriaNrMatch = _policyNumberSeriaNr.firstMatch(rawText);
@@ -372,6 +394,8 @@ class DocumentScannerService {
 
     DateTime? startDate;
     DateTime? expiryDate;
+    int? expiryLineIndex;
+    int? expiryLabelStart;
     for (var i = 0; i < lines.length; i++) {
       final startMatch = _startDateLabel.firstMatch(lines[i]);
       if (startDate == null && startMatch != null) {
@@ -382,6 +406,24 @@ class DocumentScannerService {
       if (expiryDate == null && expiryMatch != null) {
         expiryDate = _parseDate(lines[i].substring(expiryMatch.end)) ??
             (i + 1 < lines.length ? _parseDate(lines[i + 1]) : null);
+        if (expiryDate != null) {
+          expiryLineIndex = i;
+          expiryLabelStart = expiryMatch.start;
+        }
+      }
+    }
+
+    // "{dată} până la {dată}" — dacă eticheta de început ("Valabilitate...de
+    // la") nu s-a potrivit (cuvânt lung, predispus la erori OCR — verificat
+    // pe o a doua poliță reală, unde doar eticheta de expirare a fost
+    // recunoscută), ultima dată găsită ÎNAINTE de eticheta "până la" pe
+    // același rând e aproape sigur data de început, indiferent dacă "de la"
+    // a supraviețuit OCR-ului sau nu.
+    if (startDate == null && expiryLineIndex != null && expiryLabelStart != null) {
+      final before = lines[expiryLineIndex].substring(0, expiryLabelStart);
+      final beforeMatches = _datePattern.allMatches(before);
+      if (beforeMatches.isNotEmpty) {
+        startDate = _parseDate(beforeMatches.last.group(0)!);
       }
     }
 

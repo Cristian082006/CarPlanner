@@ -195,6 +195,32 @@ directă 0,00 RON, Prima totală 1.152,37 RON Nr. rate 1, după cum urmează: Ra
       expect(result.expiryDate, DateTime(2027, 4, 6));
     });
 
+    test('infers the start date from the date right before "până la" when the start label is unreadable', () {
+      // Regresie: pe o a doua poliță reală (Anytime/Interamerican Hellenic),
+      // ML Kit nu a recunoscut deloc eticheta de început ("Valabilitate" e
+      // un cuvânt lung, predispus la erori) — doar "până la" s-a potrivit,
+      // deci fostul cod nu completa nicio dată de început. Simulăm aici
+      // lipsa etichetei de început prin text fără cuvântul "Valabilitate".
+      final result = scanner.parseRcaText(
+        'Contract 02/07/2026 până la 01/07/2027 Contract emis în data de 01/07/2026',
+      );
+
+      expect(result.startDate, DateTime(2026, 7, 2));
+      expect(result.expiryDate, DateTime(2027, 7, 1));
+    });
+
+    test('extracts the provider from the line after the contract header when no label is present', () {
+      // Regresie: pe polița reală Anytime/Interamerican Hellenic nu există
+      // deloc eticheta "DENUMIRE ASIGURĂTOR:" — numele apare direct pe
+      // rândul de după antetul "CONTRACT DE ASIGURARE...".
+      final result = scanner.parseRcaText('''
+CONTRACT DE ASIGURARE DE RĂSPUNDERE CIVILĂ AUTO RCA                     Seria RO/34/D34/TL nr. 100302796
+INTERAMERICAN HELLENIC INSURANCE COMPANY S.A. ATENA - SUCURSALA BUCUREŞTI     Tel.: 0374 50 2222     R.C. J2025033442009     C.U.I. 51767670
+''');
+
+      expect(result.provider, 'INTERAMERICAN HELLENIC INSURANCE COMPANY S.A. ATENA - SUCURSALA BUCUREŞTI');
+    });
+
     test('falls back to the label-based provider extraction for an unlisted insurer', () {
       final result = scanner.parseRcaText(
         'DENUMIRE ASIGURĂTOR: SOME NEW INSURER SA                    R.C. J40/1/2020 C.U.I. 123',

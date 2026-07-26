@@ -123,27 +123,26 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
             ],
           )
         else
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               OutlinedButton.icon(
                 onPressed: () => _pick(ImageSource.camera),
                 icon: const Icon(Icons.camera_alt_outlined),
                 label: Text(S.camera),
               ),
-              const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: () => _pick(ImageSource.gallery),
                 icon: const Icon(Icons.photo_library_outlined),
                 label: Text(S.gallery),
               ),
-              if (widget.allowPdf) ...[
-                const SizedBox(width: 8),
+              if (widget.allowPdf)
                 OutlinedButton.icon(
                   onPressed: _pickPdf,
                   icon: const Icon(Icons.picture_as_pdf_outlined),
                   label: Text(S.attachPdf),
                 ),
-              ],
             ],
           ),
       ],

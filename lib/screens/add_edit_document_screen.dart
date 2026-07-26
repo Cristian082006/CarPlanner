@@ -60,7 +60,6 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
     _notesCtrl = TextEditingController(text: d?.notes ?? '');
     _startDate = d?.startDate;
     _expiryDate = d?.expiryDate ?? _expiryDate;
-    _expiryDateTouched = d != null;
     _photoPath = d?.photoPath;
     if (widget.vehicleId != null) _loadVehicle();
   }

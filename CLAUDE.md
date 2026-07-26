@@ -314,10 +314,30 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     primare (nu doar euristici generice); pentru asigurător e încercată întâi lista
     `_knownInsurers`, apoi fallback pe eticheta „DENUMIRE ASIGURĂTOR:" (tăiată la primul marker
     cunoscut — R.C./C.U.I./Sucursală etc. — ca să nu înghită și câmpurile următoare de pe același
-    rând). Best-effort ca la codul de motor din VIN: completează DOAR câmpurile goale din formular
-    (nu suprascrie ce a completat userul), nu blochează niciodată atașarea PDF-ului dacă OCR-ul
-    eșuează sau nu găsește nimic. Test de regresie cu textul real:
+    rând). Best-effort ca la codul de motor din VIN: nu blochează niciodată atașarea PDF-ului dacă
+    OCR-ul eșuează sau nu găsește nimic. Test de regresie cu textul real:
     `test/document_scanner_service_test.dart` (`group('parseRcaText', ...)`).
+    **Trei bug-uri reale găsite și fixate testând pe un PDF real trimis de utilizator (nu doar pe
+    text extras cu `pdftotext`, care ascunde primele două):**
+    - **Fundal transparent la randare**: pe iOS, `Printing.raster` întoarce pixeli RGBA cu fundal
+      TRANSPARENT (pagina PDF nu are un fill alb opac) — trimisă ca atare la ML Kit, transparența
+      se decodează ca negru, iar textul negru pe „negru" devine ilizibil (OCR găsea 0 caractere,
+      deși imaginea randată avea dimensiuni și dimensiune fișier normale). Fix: randarea e
+      compusă pe un canvas alb opac (`dart:ui` `Canvas`/`PictureRecorder`) înainte de OCR — vezi
+      comentariul din `scanRcaPdf`.
+    - **Confuzie diacritice OCR**: ML Kit a citit „până" ca „pånă" (å în loc de â) pe polița reală
+      testată — eticheta de expirare (`_expiryDateLabel`) nu accepta acea variantă, deci data
+      rămânea mereu necompletată deși restul câmpurilor (inclusiv data de început, aceeași linie)
+      se extrăgeau corect. Fix: clasa de caractere a etichetei acceptă acum mai multe variante
+      OCR-confuzabile ale diacriticelor (à/á/â/ã/ä/å), nu doar â.
+    - Un al treilea bug, în UI nu în OCR: `_expiryDateTouched` (flag care previne suprascrierea
+      unei date introduse manual de user) era inițializat `true` doar pentru că documentul era în
+      editare (`d != null`), chiar dacă acea dată era doar valoarea implicită auto-generată
+      (`DateTime.now() + 365 zile`), nu una introdusă real — asta bloca PERMANENT completarea
+      automată a datei de expirare la re-atașarea unui PDF pe un document deja salvat. Fix:
+      flag-ul pornește mereu `false`, devine `true` doar când userul chiar deschide manual
+      date-picker-ul de expirare (`_pickDate(isStart: false)`) — deci completarea din PDF poate
+      suprascrie o dată neatinsă manual, dar nu una aleasă explicit de user în sesiunea curentă.
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

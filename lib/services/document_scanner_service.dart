@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
@@ -294,8 +295,12 @@ class DocumentScannerService {
     r'valabil\w*\s*(?:contract\s*)?de\s*la\b|data\s*(?:de\s*)?(?:început|inceput)ii?\b|inceput\s*valabilitate',
     caseSensitive: false,
   );
+  // Clasele de caractere de mai jos includ â/å/ã/ä (nu doar â) fiindcă OCR-ul
+  // confundă des diacriticele — verificat pe o poliță reală, unde "până" a
+  // fost recunoscut ca "pånă" (å în loc de â); fără toleranța asta eticheta
+  // de expirare nu se potrivea deloc și data rămânea necompletată.
   static final RegExp _expiryDateLabel = RegExp(
-    r'p[aâ]n[aă]\s*la\b|data\s*expir[aă]rii\b|sf[aâ]r[șs]it\s*valabilitate',
+    r'p[aàáâãäå]n[aàáâãäåă]\s*la\b|data\s*expir[aă]rii\b|sf[aâ]r[șs]it\s*valabilitate',
     caseSensitive: false,
   );
   static final RegExp _datePattern = RegExp(r'\b(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})\b');
@@ -437,7 +442,22 @@ class DocumentScannerService {
     try {
       final bytes = await File(pdfPath).readAsBytes();
       final page = await Printing.raster(bytes, pages: const [0], dpi: 150).first;
-      final png = await page.toPng();
+
+      // Printing.raster returns RGBA pixels with a TRANSPARENT background
+      // (the PDF page itself has no opaque white fill) — passed as-is to
+      // ML Kit, the transparent background decodes as black, making dark
+      // text on it unreadable and OCR returns 0 characters (verified on a
+      // real device). Flatten onto an opaque white canvas first so it looks
+      // like a normal scanned page.
+      final rawImage = await page.toImage();
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      final size = ui.Size(rawImage.width.toDouble(), rawImage.height.toDouble());
+      canvas.drawRect(ui.Offset.zero & size, ui.Paint()..color = const ui.Color(0xFFFFFFFF));
+      canvas.drawImage(rawImage, ui.Offset.zero, ui.Paint());
+      final flattened = await recorder.endRecording().toImage(rawImage.width, rawImage.height);
+      final byteData = await flattened.toByteData(format: ui.ImageByteFormat.png);
+      final png = byteData!.buffer.asUint8List();
 
       final tmpDir = await getTemporaryDirectory();
       final tmpPath = '${tmpDir.path}/rca_ocr_${DateTime.now().microsecondsSinceEpoch}.png';

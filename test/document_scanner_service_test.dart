@@ -182,6 +182,19 @@ directă 0,00 RON, Prima totală 1.152,37 RON Nr. rate 1, după cum urmează: Ra
       expect(result.expiryDate, DateTime(2027, 4, 6));
     });
 
+    test('extracts the expiry date even when OCR mangles the "până" diacritic', () {
+      // Regresie: pe ML Kit OCR (device real, nu pdftotext), "până" a fost
+      // recunoscut ca "pånă" (å în loc de â) — eticheta de expirare nu se
+      // potrivea deloc și data rămânea necompletată, deși data de început și
+      // restul câmpurilor se extrăgeau corect.
+      final result = scanner.parseRcaText(
+        'Valabilitate Contract de la 07/04/2026 pånă la 06/04/2027 Contract emis în data de 06/04/2026',
+      );
+
+      expect(result.startDate, DateTime(2026, 4, 7));
+      expect(result.expiryDate, DateTime(2027, 4, 6));
+    });
+
     test('falls back to the label-based provider extraction for an unlisted insurer', () {
       final result = scanner.parseRcaText(
         'DENUMIRE ASIGURĂTOR: SOME NEW INSURER SA                    R.C. J40/1/2020 C.U.I. 123',

@@ -9,6 +9,21 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
 - Flutter SDK instalat la `C:\flutter` (mutat de pe D: din cauza unui bug de compilare Kotlin
   incrementală cross-drive — `kotlin.incremental=false` e setat în `android/gradle.properties`
   ca fix suplimentar).
+- **Toolchain Android fixat la AGP 8.11.1 / Kotlin 2.2.20 / Gradle 8.14.3** (`android/settings.gradle.kts`,
+  `android/gradle/wrapper/gradle-wrapper.properties`) — coborâte explicit de la valorile implicite
+  ale template-ului Flutter la data creării proiectului (AGP 9.0.1 / Kotlin 2.3.20 / Gradle 9.1.0),
+  descoperit la portarea pe macOS fără toolchain Android preexistent (proiectul fusese testat doar
+  pe Windows până acum, cu un toolchain probabil mai vechi). **AGP 9+ obligă la o alegere globală
+  „built-in Kotlin" (`android.builtInKotlin=true/false`) pentru tot proiectul deodată** — dar
+  pluginurile din acest proiect sunt la stadii diferite de migrare: `file_picker` (v11+) presupune
+  deja built-in Kotlin activat (nu mai aplică el însuși plugin-ul Kotlin pe AGP 9+), în timp ce
+  `add_2_calendar` încă aplică manual `org.jetbrains.kotlin.android` — combinație imposibil de
+  satisfăcut simultan sub AGP 9 (fie unul, fie celălalt eșuează la compilare cu „cannot find
+  symbol"/„KGP was not found on the classpath"). AGP 8.11.1/Kotlin 2.2.20 (minimul recomandat chiar
+  de avertismentele Flutter tool) nu au această problemă. **Dacă mai apare un asemenea conflict la
+  o viitoare actualizare de pluginuri**, nu presupune că soluția e activarea/dezactivarea
+  `android.builtInKotlin` — verifică întâi dacă TOATE pluginurile folosite sunt migrate la același
+  stil, altfel rămâi pe un AGP <9.
 - SQLite via `sqflite`, singleton în `lib/db/database_helper.dart`, cu migrații `onUpgrade`
   (versiune curentă: 15 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
   `changedComponentIds` pe `service_records`, v4 a adăugat `customIntervalKm/Months/Source` pe

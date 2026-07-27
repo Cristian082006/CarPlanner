@@ -183,7 +183,7 @@ const List<String> referenceDataStatements = [
     ('Benzina', 16, 60000, 48, NULL),
     ('Benzina', 21, NULL, 60, 'In functie de conditii de utilizare')""",
   """INSERT INTO intervale_generice (combustibil, componenta_id, interval_km, interval_luni, observatii) VALUES
-    ('Diesel', 1, 15000, 12, 'Diesel moderne cu ulei long-life; unele modele 20-30k km'),
+    ('Diesel', 1, 12000, 12, 'Diesel fara ulei longlife: 10-15k km (verificat Dacia dCi: 10k km oficial); modelele cu ulei longlife (VW 507 00, BMW LL-04 etc.) pot ajunge la 20-30k km — foloseste cartea tehnica'),
     ('Diesel', 2, 30000, 24, NULL),
     ('Diesel', 3, 15000, 12, NULL),
     ('Diesel', 4, 30000, 24, 'La diesel se schimba mai des decat la benzina'),
@@ -2354,7 +2354,455 @@ const List<String> referenceDataStatements = [
     (762, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
     (762, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
     (763, 5, 160000, 120, 'Estimare orientativa - verifica manualul masinii'),
-    (763, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie')""",
+    (763, 6, 160000, 120, 'Se schimba obligatoriu impreuna cu cureaua de distributie'),
+    -- Ulei motor pentru motoarele Dacia K9K (dCi) — suprascrie fallback-ul
+    -- generic Diesel (12000/12, vezi intervale_generice) cu intervalul oficial
+    -- Dacia verificat: 10.000 km / 12 luni (user-manual.dacia.com, Logan dCi).
+    -- Motor id-uri: 131/133 Duster, 137/138 Logan, 141/143 Sandero.
+    (131, 1, 10000, 12, 'Interval oficial Dacia dCi (user-manual.dacia.com)'),
+    (133, 1, 10000, 12, 'Interval oficial Dacia dCi (user-manual.dacia.com)'),
+    (137, 1, 10000, 12, 'Interval oficial Dacia dCi (user-manual.dacia.com)'),
+    (138, 1, 10000, 12, 'Interval oficial Dacia dCi (user-manual.dacia.com)'),
+    (141, 1, 10000, 12, 'Interval oficial Dacia dCi (user-manual.dacia.com)'),
+    (143, 1, 10000, 12, 'Interval oficial Dacia dCi (user-manual.dacia.com)'),
+    -- Ulei motor Honda diesel (v17) — fallback-ul generic Diesel (12000/12)
+    -- era conservator (sub cel real), dar utilizatorul a cerut explicit
+    -- intervalul real chiar și când fallback-ul era deja sigur. Surse: forum
+    -- civinfo.com (Honda Civic FK3 1.6 i-DTEC: 15000 km/12 luni) și AUTODOC
+    -- (2.2 i-CTDi/i-DTEC: ~20000 km) — surse secundare, nu manualul oficial
+    -- Honda direct, deci încredere moderată (la fel ca la Škoda, dar aici s-a
+    -- decis să se aplice oricum). Motor id-uri: 202/204/207/209/215 = 2.2
+    -- i-CTDi/i-DTEC (Accord/CR-V/Civic), 217/219 = 1.6 i-DTEC (Civic).
+    (202, 1, 20000, 12, 'Interval Honda 2.2 i-CTDi/i-DTEC (sursa: AUTODOC, incredere moderata)'),
+    (204, 1, 20000, 12, 'Interval Honda 2.2 i-CTDi/i-DTEC (sursa: AUTODOC, incredere moderata)'),
+    (207, 1, 20000, 12, 'Interval Honda 2.2 i-CTDi/i-DTEC (sursa: AUTODOC, incredere moderata)'),
+    (209, 1, 20000, 12, 'Interval Honda 2.2 i-CTDi/i-DTEC (sursa: AUTODOC, incredere moderata)'),
+    (215, 1, 20000, 12, 'Interval Honda 2.2 i-CTDi/i-DTEC (sursa: AUTODOC, incredere moderata)'),
+    (217, 1, 15000, 12, 'Interval Honda 1.6 i-DTEC (sursa: forum civinfo.com Civic FK3, incredere moderata)'),
+    (219, 1, 15000, 12, 'Interval Honda 1.6 i-DTEC (sursa: forum civinfo.com Civic FK3, incredere moderata)'),
+    -- Ulei motor Mitsubishi DI-D (v17) — la fel, fallback-ul generic era deja
+    -- conservator dar utilizatorul a cerut valoarea reală. Sursa: forumuri
+    -- Mitsubishi ASX/Outlander (1.6/1.8/2.2 DI-D: 20000 km/24 luni),
+    -- incredere moderata (surse secundare). Aplicat doar pe 4N13 (1.8, ASX +
+    -- Lancer) si 4N14 (2.2, Outlander) — motoare explicit acoperite de sursa;
+    -- 4D68 (2.0 DI-D, Lancer vechi) si 4N15 (2.4 DI-D, L200 pickup) sunt
+    -- generatii/motoare diferite, nu au fost verificate separat, raman pe
+    -- fallback-ul generic.
+    (414, 1, 20000, 24, 'Interval Mitsubishi DI-D (surse forum ASX/Outlander, incredere moderata)'),
+    (421, 1, 20000, 24, 'Interval Mitsubishi DI-D (surse forum ASX/Outlander, incredere moderata)'),
+    (424, 1, 20000, 24, 'Interval Mitsubishi DI-D (surse forum ASX/Outlander, incredere moderata)'),
+    (426, 1, 20000, 24, 'Interval Mitsubishi DI-D (surse forum ASX/Outlander, incredere moderata)'),
+    -- Ulei motor Fiat/Jeep MultiJet 1.6/2.0 (v18) — sursa: forumuri Fiat
+    -- ("de la sursa", citand schema oficiala Fiat): 35000 km/24 luni, cu
+    -- exceptia explicita "daca <10000 km/an sau uz preponderent urban, la 12
+    -- luni" (nu modelam exceptia, doar valoarea standard). Incredere moderata
+    -- (surse secundare). Aplicat pe motoarele 1.6 MultiJet (Fiat 500L/500X/
+    -- Bravo/Doblo/Tipo + Jeep Renegade) si 2.0 MultiJet (Jeep Compass) —
+    -- NU pe 1.3 MultiJet (Panda/Punto, motor mai mic, nu a fost acoperit de
+    -- sursa) si NU pe CRD 2.8/3.0 (familie de motor diferita, Iveco/VM).
+    (155, 1, 35000, 24, 'Interval Fiat/Jeep 1.6 MultiJet (surse forum, incredere moderata; 12 luni daca uz urban <10000km/an)'),
+    (157, 1, 35000, 24, 'Interval Fiat/Jeep 1.6 MultiJet (surse forum, incredere moderata; 12 luni daca uz urban <10000km/an)'),
+    (159, 1, 35000, 24, 'Interval Fiat/Jeep 1.6 MultiJet (surse forum, incredere moderata; 12 luni daca uz urban <10000km/an)'),
+    (161, 1, 35000, 24, 'Interval Fiat/Jeep 1.6 MultiJet (surse forum, incredere moderata; 12 luni daca uz urban <10000km/an)'),
+    (169, 1, 35000, 24, 'Interval Fiat/Jeep 1.6 MultiJet (surse forum, incredere moderata; 12 luni daca uz urban <10000km/an)'),
+    (270, 1, 35000, 24, 'Interval Fiat/Jeep 2.0 MultiJet (surse forum, incredere moderata; 12 luni daca uz urban <10000km/an)'),
+    (280, 1, 35000, 24, 'Interval Fiat/Jeep 1.6 MultiJet (surse forum, incredere moderata; 12 luni daca uz urban <10000km/an)'),
+    -- Ulei motor Porsche V6 TDI (v18) — sursa: documentatie oficiala Porsche
+    -- citata pe forumuri specializate (6speedonline/rennlist): 7500 km/12
+    -- luni (redus de la 10000 km initial pe modelele mai vechi). SPRE
+    -- DEOSEBIRE de restul fixurilor din acest lot, asta e in DIRECTIA
+    -- PERICULOASA fata de fallback-ul generic (12000 km) — la fel ca Dacia
+    -- in v16, catalogul era prea permisiv, nu doar conservator. Aplicat pe
+    -- toate motoarele V6 diesel Cayenne (M55.01/CTBA/SCR-231) si Panamera
+    -- (CKUA) — aceeasi platforma VW/Audi/Porsche V6 TDI.
+    (516, 1, 7500, 12, 'Interval oficial Porsche V6 TDI (surse: 6speedonline/rennlist, directie periculoasa vs fallback)'),
+    (518, 1, 7500, 12, 'Interval oficial Porsche V6 TDI (surse: 6speedonline/rennlist, directie periculoasa vs fallback)'),
+    (520, 1, 7500, 12, 'Interval oficial Porsche V6 TDI (surse: 6speedonline/rennlist, directie periculoasa vs fallback)'),
+    (524, 1, 7500, 12, 'Interval oficial Porsche V6 TDI (surse: 6speedonline/rennlist, directie periculoasa vs fallback)'),
+    -- Ulei motor Suzuki 1.9 DDiS (v18) — sursa: auto-abc.eu, Grand Vitara 1.9
+    -- diesel: 15000 km/12 luni. Extins si la 9HZ (SX4, acelasi motor 1.9
+    -- DDiS de generatie similara) — incredere moderata. NU aplicat pe D13A
+    -- (1.3 DDiS, Swift, motor diferit, fara sursa specifica).
+    (617, 1, 15000, 12, 'Interval Suzuki 1.9 DDiS (sursa auto-abc.eu Grand Vitara, incredere moderata)'),
+    (622, 1, 15000, 12, 'Interval Suzuki 1.9 DDiS (sursa auto-abc.eu Grand Vitara, incredere moderata; extins de la RHZ)'),
+    -- Ulei motor Land Rover TDV6/TD4 (v19) — surse: forumuri specializate
+    -- (aulro.com pentru TDV6, landroveranaheimhills.com pentru TD4), ambele
+    -- conservatoare (peste fallback-ul generic de 12000 km). Nissan M9R/R9M
+    -- (X-Trail/Qashqai) si Jeep 3.0 CRD (Grand Cherokee, VM Motori) au fost
+    -- verificate in aceeasi runda dar NU au primit regula — surse conflictuale
+    -- (Schedule A/B diferite dupa conditii, ca la Renault/Hyundai-Kia mai sus),
+    -- nu un numar unic de incredere.
+    -- TDV6 3.0 (Discovery 2009+, model 324; Range Rover Sport, model 336 —
+    -- acelasi motor TDV6 3.0/245 partajat): 26000 km/12 luni.
+    (324, 1, 26000, 12, 'Interval Land Rover TDV6 3.0 (sursa forum aulro.com, incredere moderata)'),
+    (336, 1, 26000, 12, 'Interval Land Rover TDV6 3.0 (sursa forum aulro.com, incredere moderata; extins de la Discovery)'),
+    -- TD4 2.0 (Discovery Sport 326, Freelander 330, Range Rover Evoque 334 —
+    -- acelasi motor TD4/Ingenium partajat): 34000 km/24 luni.
+    (326, 1, 34000, 24, 'Interval Land Rover TD4 2.0 (sursa landroveranaheimhills.com, incredere moderata)'),
+    (330, 1, 34000, 24, 'Interval Land Rover TD4 2.0 (sursa landroveranaheimhills.com, incredere moderata; extins la Freelander)'),
+    (334, 1, 34000, 24, 'Interval Land Rover TD4 2.0 (sursa landroveranaheimhills.com, incredere moderata; extins la Evoque)'),
+    -- Ulei motor Fiat 1.3 MultiJet (v20) — sursa: forumuri Fiat (boards.ie/
+    -- fiatforum.com), interval oficial Fiat pentru varianta 75bhp: 20000
+    -- km/24 luni. Aplicat pe Panda 163 (199A2.000, 75cp) si Punto 167
+    -- (199A9.000, 90cp — aceeasi familie de motor/platforma, sursa nu separa
+    -- explicit variantele de putere).
+    (163, 1, 20000, 24, 'Interval oficial Fiat 1.3 MultiJet (surse forum, incredere moderata)'),
+    (167, 1, 20000, 24, 'Interval oficial Fiat 1.3 MultiJet (surse forum, incredere moderata; extins de la Panda)'),
+    -- Ulei motor Mitsubishi L200 4N15 2.4 DI-D (v20) — sursa: auto-abc.eu +
+    -- AUTODOC, generatia KJ/KK/KL (2014-2025, coincide cu anii 2015-NULL din
+    -- catalog): 15000 km/12 luni. Generatiile mai vechi de L200 (2.5 DI-D,
+    -- 4D56) aveau 10000 km, dar nu exista in catalog ca motor separat.
+    (416, 1, 15000, 12, 'Interval Mitsubishi L200 4N15 generatie KJ/KK/KL (surse auto-abc.eu/AUTODOC, incredere moderata)'),
+    -- Ulei motor Land Rover TD5/TDV8/SDV6 (v20) — surse: forumuri specializate
+    -- (twinwoods4x4.com/aulro.com pentru TD5, landyzone.co.uk pentru TDV8,
+    -- roverparts.eu pentru SDV6). Td5 (Defender, motor id 319): 20000 km/12
+    -- luni. TDV8 (Range Rover, 332): ~16000 mile/25700 km, rotunjit la 26000
+    -- km/12 luni. SDV6 (Range Rover Sport, 338): 15000 km/12 luni. Freelander
+    -- L-Series 2.0 Di (328, motor mai vechi, alta familie) NU are sursa
+    -- specifica, ramane pe fallback-ul generic.
+    (319, 1, 20000, 12, 'Interval oficial Land Rover Td5 (manual, incredere moderata)'),
+    (332, 1, 26000, 12, 'Interval Land Rover TDV8 (sursa forum landyzone.co.uk, ~16000 mile, incredere moderata)'),
+    (338, 1, 15000, 12, 'Interval Land Rover SDV6 (sursa forum roverparts.eu, incredere moderata)'),
+    -- v21 — lot final, cerut de utilizator sa continui singur cu tot restul
+    -- catalogului. Brand-uri ramase AMBIGUE (surse conflictuale intre ele,
+    -- fara un numar unic de incredere) — NU s-a aplicat nicio regula, la fel
+    -- ca Renault/Hyundai-Kia/Nissan/Jeep mai devreme: VW/Audi/Seat/Skoda 2.0
+    -- TDI CR (Longlife variabil 9000-30000 mile dupa configurare), BMW
+    -- (Condition Based Service, variaza 10000-18000 mile), Mercedes OM6xx
+    -- (ASSYST PLUS variabil, Service A ~25000km/12luni vs Service B
+    -- ~40000km/24luni, prea diferite pentru un singur numar), Opel CDTI
+    -- (surse contradictorii: 30000km vs 16000km pentru aceleasi coduri de
+    -- motor Z-prefix), Mazda Skyactiv-D (nicio sursa specifica diesel
+    -- gasita, doar date generice benzina din manualul american).
+    --
+    -- Toyota D-4D (toate motoarele 1ND-TV/1AD-FTV/2AD-FTV/1CD-FTV/2AD-FHV) —
+    -- sursa: manual oficial citat (manuals.plus, Toyota Yaris Europe) +
+    -- confirmari multiple forum: 15000 km/12 luni. Motor id: 635 (Auris),
+    -- 639/640 (Avensis), 651/652 (Corolla), 659/661/663 (RAV4), 667 (Yaris).
+    (635, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    (639, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    (640, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    (651, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    (652, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    (659, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    (661, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    (663, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    (667, 1, 15000, 12, 'Interval oficial Toyota D-4D (manual Toyota Europe, manuals.plus)'),
+    -- PSA HDi (non-Blue, pre-DPF sau DPF fara branding "Blue") — sursa:
+    -- peugeotforums.com/frenchcarforum: 12500 mile (20000 km)/12 luni,
+    -- consistent citat pentru generatia veche HDi. Aplicat pe toate
+    -- motoarele codate HDi (nu BlueHDi) din Peugeot si Citroen.
+    (103, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (107, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (109, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (111, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (115, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (117, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (121, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (123, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (127, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (483, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (485, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (489, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (493, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (495, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (501, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (502, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    (506, 1, 20000, 12, 'Interval oficial PSA HDi (surse forum, incredere moderata)'),
+    -- PSA BlueHDi (branding explicit "BlueHDi" in denumire, generatie Euro6+)
+    -- — sursa: 16000 mile (~26000 km, rotunjit)/12 luni; unele surse
+    -- mentioneaza pana la 40000 km/2 ani (schema flexibila), dar 26000 km e
+    -- valoarea "standard" mai des citata. Aplicat pe toate motoarele codate
+    -- BlueHDi explicit.
+    (104, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (113, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (119, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (125, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (481, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (487, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (491, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (497, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (499, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (505, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    (509, 1, 26000, 12, 'Interval oficial PSA BlueHDi (surse forum, incredere moderata)'),
+    -- Volvo 2.4D/D5 (5 cilindri) — surse volvohowto.com, doua generatii cu
+    -- interval diferit: 2001-2006 (mai vechi) = 20000 km/12 luni; 2005-2015+
+    -- (generatie imbunatatita, inclusiv D5244T XC60 si D5204T XC90) = 30000
+    -- km/12 luni. NU s-a aplicat pe motoarele D4204T (generatia Drive-E,
+    -- 2010+, platforma total diferita) — fara sursa specifica pentru acelea.
+    (727, 1, 20000, 12, 'Interval Volvo 2.4D/D5 generatie veche (sursa volvohowto.com, incredere moderata)'),
+    (732, 1, 20000, 12, 'Interval Volvo 2.4D/D5 generatie veche (sursa volvohowto.com, incredere moderata)'),
+    (742, 1, 20000, 12, 'Interval Volvo 2.4D/D5 generatie veche (sursa volvohowto.com, incredere moderata)'),
+    (734, 1, 30000, 12, 'Interval Volvo 2.4D/D5 generatie noua (sursa volvohowto.com, incredere moderata)'),
+    (743, 1, 30000, 12, 'Interval Volvo 2.4D/D5 generatie noua (sursa volvohowto.com, incredere moderata)'),
+    (750, 1, 30000, 12, 'Interval Volvo 2.4D/D5 generatie noua (sursa volvohowto.com, incredere moderata)'),
+    (754, 1, 30000, 12, 'Interval Volvo 2.4D/D5 generatie noua (sursa volvohowto.com, incredere moderata)'),
+    (756, 1, 30000, 12, 'Interval Volvo 2.4D/D5 generatie noua (sursa volvohowto.com, incredere moderata)'),
+    -- v22 — Hyundai/Kia CRDi (D3EA/D4EA/D4EB/D4HA/D4HB/D4FA/D4FB/D4CB/D4FD/U2)
+    -- reluat cu cautare specifica pe surse UK/EU (forumuri hyundai-forums.com,
+    -- i30ownersclub.com), spre deosebire de runda anterioara (Renault/
+    -- Hyundai-Kia impreuna) care a dat rezultate US/UK amestecate si
+    -- ambigue. De data asta 15000 km/12 luni e valoarea cel mai des si
+    -- consistent citata pe mai multe generatii/modele (i30, Tucson, Santa
+    -- Fe), desi exista variatii marginale: generatia veche (2006-2009, ex.
+    -- Santa Fe 2.2 CRDi D4EB) citata uneori la 10000 mile (~16000 km), iar
+    -- modele UK mai noi la 20000 mile (~32000 km) — dar 15000 km ramane
+    -- valoarea de mijloc, cea mai consistenta. Aplicat pe TOATE motoarele
+    -- CRDi Hyundai SI Kia (acelasi motor partajat in grupul Hyundai-Kia,
+    -- confirmat de codurile identice D4FB/D4EA/D4FA/D4HA in ambele branduri).
+    (229, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (236, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (238, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (239, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (242, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (244, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (245, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (248, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (250, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (255, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (257, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (259, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (262, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata)'),
+    (283, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (286, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (289, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (299, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (301, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (304, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (306, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (307, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (309, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (312, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (313, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    (316, 1, 15000, 12, 'Interval Hyundai/Kia CRDi (surse forum UK/EU, incredere moderata; extins de la Hyundai)'),
+    -- v23 — Renault dCi reverificat cu surse UK specifice (daciaforum.co.uk,
+    -- renaultforums.co.uk, meganeownersclub.co.uk), spre deosebire de runda
+    -- v19 (impreuna cu Hyundai-Kia, ambigua). Rezultat:
+    -- K9K (Clio/Captur/Megane/Scenic K9K, si echivalentul Nissan Micra/Note/
+    -- Qashqai) — sursa oficiala Renault UK (OCS, daciaforum.co.uk): 12000
+    -- km/12 luni. Coincide EXACT cu fallback-ul generic Diesel (v16), deci
+    -- NU s-a adaugat regula specifica (ar fi fost redundanta) — K9K e
+    -- confirmat corect asa cum e.
+    -- F9Q (1.9 dCi, Megane 552, Scenic 558, generatie mai veche, FARA FAP/
+    -- DPF de baza) — sursa renaultforums.co.uk: 18000 mile standard post-2000
+    -- = ~29000 km/12 luni.
+    (552, 1, 29000, 12, 'Interval Renault F9Q 1.9 dCi, fara FAP (sursa forum renaultforums.co.uk, incredere moderata)'),
+    (558, 1, 29000, 12, 'Interval Renault F9Q 1.9 dCi, fara FAP (sursa forum renaultforums.co.uk, incredere moderata)'),
+    -- M9R (2.0/1.9 dCi, Espace 545, Laguna 548/550 — generatie mai noua, CU
+    -- FAP/DPF de serie) — aceeasi sursa: motoarele cu filtru de particule au
+    -- interval mai scurt, 9000 mile = ~14500 km/12 luni.
+    (545, 1, 14500, 12, 'Interval Renault M9R dCi, cu FAP (sursa forum renaultforums.co.uk, incredere moderata)'),
+    (548, 1, 14500, 12, 'Interval Renault M9R dCi, cu FAP (sursa forum renaultforums.co.uk, incredere moderata)'),
+    (550, 1, 14500, 12, 'Interval Renault M9R dCi, cu FAP (sursa forum renaultforums.co.uk, incredere moderata)'),
+    -- v24 — Nissan M9R/R9M reverificat cu surse UK (x-trail-uk.co.uk):
+    -- NICIO regula noua — conflict real, nu ambiguitate rezolvabila. Sursa UK
+    -- Nissan (X-Trail 2.0 dCi M9R, 2012): 18000 mile/12 luni (~29000 km).
+    -- Insa M9R e ACELASI motor fizic ca Renault M9R (alianta Renault-Nissan),
+    -- pentru care sursa UK Renault (v23) a dat 9000 mile/~14500 km (motor CU
+    -- FAP). Cele doua surse UK, pentru literalmente acelasi motor, difera de
+    -- peste 2x — contradictie reala intre branduri, nu zgomot de cautare.
+    -- Ramane pe fallback-ul generic (12000 km) pana la o sursa care sa explice
+    -- diferenta (poate schema Nissan UK e cea "extinsa"/flexibila, nu cea
+    -- "fixa"). R9M (Qashqai 1.6 dCi) — nicio cifra gasita, fara sursa.
+    --
+    -- Jeep 2.0/2.8/3.0 CRD (Compass/Patriot 2.0, Cherokee 2.8, Grand Cherokee
+    -- 3.0) — reverificat cu surse UK (jeepgarage.org citand site-ul oficial
+    -- Jeep UK): 12500 mile/12 luni (~20000 km), SPRE DEOSEBIRE de conflictul
+    -- Schedule A/B gasit anterior (acela era intre piata UK si cea
+    -- Australia/SUA, nu un conflict intern UK) — sursa UK insasi e consistenta
+    -- de data asta. Aplicat pe toate motoarele CRD (nu doar 3.0), fiindca
+    -- sursa nu diferentiaza explicit dupa capacitate.
+    (264, 1, 20000, 12, 'Interval Jeep CRD (sursa site oficial Jeep UK, citata pe jeepgarage.org, incredere moderata)'),
+    (265, 1, 20000, 12, 'Interval Jeep CRD (sursa site oficial Jeep UK, citata pe jeepgarage.org, incredere moderata)'),
+    (268, 1, 20000, 12, 'Interval Jeep CRD (sursa site oficial Jeep UK, citata pe jeepgarage.org, incredere moderata)'),
+    (271, 1, 20000, 12, 'Interval Jeep CRD (sursa site oficial Jeep UK, citata pe jeepgarage.org, incredere moderata)'),
+    (274, 1, 20000, 12, 'Interval Jeep CRD (sursa site oficial Jeep UK, citata pe jeepgarage.org, incredere moderata)'),
+    (278, 1, 20000, 12, 'Interval Jeep CRD (sursa site oficial Jeep UK, citata pe jeepgarage.org, incredere moderata)'),
+    -- v25 — BMW diesel (M47/N47/B47/M57/N57/B57) reverificat cu surse UK
+    -- (pistonheads.com, bimmerforums.co.uk, bmwccgbforum.co.uk) — spre
+    -- deosebire de runda anterioara (care descria doar "Condition Based
+    -- Service variabil, fara numar"), de data asta DOUA surse UK independente
+    -- converg pe aceeasi cifra oficiala: schema de service BMW UK ("service
+    -- plan") e 18000 mile/24 luni (~29000 km/24 luni) — cifra la care se
+    -- aprinde de regula lumina CBS. Mentiuni de "10-16k mile" sau "9-10k
+    -- mile" gasite in aceleasi cautari sunt practica independenta a
+    -- mecanicilor/proprietarilor ingrijorati de longevitatea turbinei, NU
+    -- cifra oficiala BMW — nu au fost folosite. Aplicat pe toate cele 26 de
+    -- motoare diesel BMW din catalog (aceeasi schema CBS/18k se aplica
+    -- generic pe toata gama diesel UK, nu doar 320d).
+    (46, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (48, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (50, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (52, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (53, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (56, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (59, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (61, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (63, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (65, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (67, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (68, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (71, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (73, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (75, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (77, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (81, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (83, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (85, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (86, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (89, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (91, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (93, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (95, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (96, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    (99, 1, 29000, 24, 'Interval oficial BMW UK CBS (surse forum, incredere moderata)'),
+    -- v26 — VW/Audi/Seat/Skoda (VAG) TDI CR reverificat cu surse UK
+    -- (honestjohn.co.uk, elginvw.com, sunset-derby.co.uk, rwcmotorsport.com)
+    -- — spre deosebire de rundele anterioare (care descriau doar schema
+    -- Longlife/Variable, 9000-30000 mile dupa configurare, prea largii
+    -- pentru un numar unic), de data asta sursele UK converg pe schema
+    -- **Fixed** ca fiind cea "standard"/oficiala citata cel mai des:
+    -- 10.000 mile (~16.000 km, o sursa) / 15.000 km (alta sursa,
+    -- honestjohn.co.uk, citand handbook-ul), 12 luni — suficient de
+    -- consistente pentru un fix (15000 km). Schema Variable/Longlife (pana
+    -- la 30000 km) ramane optiunea implicita din fabrica pentru masinile noi
+    -- din UK, dar Fixed e alegerea recomandata pentru conditii normale/uz
+    -- redus si e cea documentata explicit in handbook — aleasa aici ca fiind
+    -- mai sigura (interval mai scurt) decat Variable, la fel cum s-a
+    -- procedat si la celelalte fix-uri din acest catalog. Aplicat pe toate
+    -- cele 64 de motoare TDI CR ramase neacoperite din cele 4 branduri VAG
+    -- (BKD/CRBC/DTVA/BRE/CAGA/DETA/CAHA/CGLC/BMC/DIGB/DFHA/CASA/DCUA/AMF/
+    -- ASY/CFWA/ASV/CBDB/CLHA/AVF/CFGB/DFGA/ALH/DFSA/DGEA/BKC/CUPA/AVB/BMP/
+    -- CFFB/DEZA/CFHC).
+    (4, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (6, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (8, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (10, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (12, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (14, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (16, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (18, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (20, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (22, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (24, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (26, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (28, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (30, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (33, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (35, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (37, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (39, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (41, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (43, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (566, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (569, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (571, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (573, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (575, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (579, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (581, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (583, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (585, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (587, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (589, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (592, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (594, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (598, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (600, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (602, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (604, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (606, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (608, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (611, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (613, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (615, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (675, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (677, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (679, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (680, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (683, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (685, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (687, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (689, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (691, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (696, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (697, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (700, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (702, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (704, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (706, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (708, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (713, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (716, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (718, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (719, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (722, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    (724, 1, 15000, 12, 'Interval oficial VAG TDI Fixed (surse UK: honestjohn.co.uk/elginvw.com, incredere moderata)'),
+    -- v27 — Nissan M9R/R9M, Mercedes OM6xx, Opel CDTI, Mazda Skyactiv-D
+    -- reverificate cu surse UK, la cererea utilizatorului.
+    --
+    -- Nissan M9R/R9M — TOT fara regula. Sursa UK noua (x-trail-uk.co.uk,
+    -- forumuri): "12500 mile/12 luni", DAR si "18000 mile, confirmat de
+    -- Nissan Customer Service pentru anumiti ani de model" — chiar si NUMAI
+    -- in interiorul surselor UK Nissan exista un conflict intre generatii,
+    -- plus conflictul deja cunoscut cu Renault M9R (motor fizic identic,
+    -- 9000 mile, v23). Nu exista un numar unic de incredere — ramane pe
+    -- fallback-ul generic (12000 km).
+    --
+    -- Mercedes OM651/OM654 (motoarele in 4 cilindri moderne, NU si OM656 V6
+    -- mai mare/alta clasa de vehicul, nici motoarele mai vechi OM613/OM612/
+    -- OM640/OM642/OM646/OM608) — sursa UK (pistonheads.com/mbclub.co.uk,
+    -- E220d): 15000 mile/12 luni (~24000 km) — de data asta o cifra unica,
+    -- consistenta, spre deosebire de runda anterioara (Service A ~25000 km
+    -- vs Service B ~40000 km, prea diferite).
+    (362, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (364, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (372, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (375, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (378, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (379, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (383, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (384, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (398, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (400, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (402, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    (406, 1, 24000, 12, 'Interval Mercedes OM651/OM654 (sursa UK pistonheads.com/mbclub.co.uk, incredere moderata)'),
+    -- Opel/Vauxhall CDTI — sursa UK (honestjohn.co.uk, vauxhallownersnetwork.
+    -- co.uk): distinctie clara intre modele mici/vechi (Astra H/J, Corsa) la
+    -- 10000 mile/12 luni (~16000 km) si modele mari/noi (Insignia) la 20000
+    -- mile/12 luni (~32000 km). DV6FD e motorul PSA BlueHDi post-Stellantis
+    -- (acelasi cod ca la Peugeot/Citroen, v21) — extins la 26000 km/12 luni
+    -- pentru consistenta cu fixul deja aplicat acolo. Motoarele Y-prefix
+    -- (Y17DT/Y20DTH, generatia cea mai veche, pre-CDTI) raman fara sursa.
+    (452, 1, 16000, 12, 'Interval Opel CDTI mic/vechi (sursa UK honestjohn.co.uk, incredere moderata)'),
+    (454, 1, 16000, 12, 'Interval Opel CDTI mic/vechi (sursa UK honestjohn.co.uk, incredere moderata)'),
+    (456, 1, 16000, 12, 'Interval Opel CDTI mic/vechi (sursa UK honestjohn.co.uk, incredere moderata)'),
+    (458, 1, 26000, 12, 'Interval Opel DV6FD, motor PSA BlueHDi (vezi v21, extins pentru consistenta)'),
+    (462, 1, 16000, 12, 'Interval Opel CDTI mic/vechi (sursa UK honestjohn.co.uk, incredere moderata)'),
+    (464, 1, 16000, 12, 'Interval Opel CDTI mic/vechi (sursa UK honestjohn.co.uk, incredere moderata)'),
+    (468, 1, 26000, 12, 'Interval Opel DV6FD, motor PSA BlueHDi (vezi v21, extins pentru consistenta)'),
+    (470, 1, 32000, 12, 'Interval Opel Insignia CDTI (sursa UK, incredere moderata)'),
+    (472, 1, 32000, 12, 'Interval Opel Insignia CDTI (sursa UK, incredere moderata)'),
+    (479, 1, 16000, 12, 'Interval Opel CDTI mic/vechi (sursa UK honestjohn.co.uk, incredere moderata)'),
+    -- Mazda Skyactiv-D (NU si motoarele vechi MZ-CD/MZR-CD, pre-Skyactiv) —
+    -- sursa: 12000-12500 mile/12 luni (~20000 km), consistent intre mai
+    -- multe citari UK/EU de data asta.
+    (342, 1, 20000, 12, 'Interval Mazda Skyactiv-D (surse UK/EU, incredere moderata)'),
+    (350, 1, 20000, 12, 'Interval Mazda Skyactiv-D (surse UK/EU, incredere moderata)'),
+    (354, 1, 20000, 12, 'Interval Mazda Skyactiv-D (surse UK/EU, incredere moderata)'),
+    (360, 1, 20000, 12, 'Interval Mazda Skyactiv-D (surse UK/EU, incredere moderata)'),
+    -- v28 — Nissan reverificat inca o data. Gasit motivul real al
+    -- conflictului M9R: intervalul X-Trail s-a schimbat la o actualizare de
+    -- model de la finalul lui 2010 (12500 mile inainte -> 18000 mile dupa),
+    -- iar motorul M9R din catalog acopera exact 2007-2014 — traverseaza acel
+    -- prag, deci NU poate primi un numar unic de incredere fara sa stim anul
+    -- exact al masinii (catalogul nu tine evidenta anului per vehicul
+    -- individual, doar intervalul motorului). Ramane pe fallback.
+    -- R9M (Qashqai 1.6 dCi, 2014+, motor mai nou care a inlocuit M9R) are
+    -- insa o sursa curata: ~30000 km/12 luni (interval european citat
+    -- explicit pentru Qashqai 1.6 dCi). Aplicat doar pe R9M (motor id 450,
+    -- X-Trail — Qashqai R9M nu are inca o intrare proprie in catalog).
+    (450, 1, 30000, 12, 'Interval Nissan R9M (sursa EU Qashqai 1.6 dCi, incredere moderata)')""",
 ];
 
 /// Normalizează un cod de motor (majuscule, fără spații/liniuțe/puncte) —

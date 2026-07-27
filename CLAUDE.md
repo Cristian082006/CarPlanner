@@ -25,17 +25,42 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   `android.builtInKotlin` — verifică întâi dacă TOATE pluginurile folosite sunt migrate la același
   stil, altfel rămâi pe un AGP <9.
 - SQLite via `sqflite`, singleton în `lib/db/database_helper.dart`, cu migrații `onUpgrade`
-  (versiune curentă: 15 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
+  (versiune curentă: 28 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
   `changedComponentIds` pe `service_records`, v4 a adăugat `customIntervalKm/Months/Source` pe
   `component_records` + tabela `vehicle_extra_components`, v5 a adăugat coloana `engineCode` pe
   `vehicles`, v6 a adăugat un prim set de tabele de catalog `vehicle_models`/`maintenance_intervals`
   — **înlocuite complet la v7**, dropuite necondiționat la orice upgrade `oldVersion<7`, nu mai
   există în cod; v8/v9/v10/v11 au înlocuit succesiv *datele* din catalog cu exporturi tot mai mari,
   v12/v13 au fost completări punctuale pentru un singur motor (Ford Fiesta 1.6 TDCi, cerut de un
-  utilizator), v14 a **eliminat** 882 de motorizări generate mecanic (vezi mai jos), iar v15 a
+  utilizator), v14 a **eliminat** 882 de motorizări generate mecanic (vezi mai jos), v15 a
   înlocuit catalogul cu structura **consolidată** din `auto_mentenanta_5.sql` (un singur rând per
-  nameplate, fără generații — vezi mai jos) — schema tabelelor rămânând neschimbată pe tot
-  parcursul, mai puțin faptul că `modele.generatie` e NULL peste tot din v15).
+  nameplate, fără generații — vezi mai jos), v16 a corectat intervalul de ulei motor pentru diesel
+  (vezi „Verificare acuratețe intervale” mai jos), iar v17 a adăugat reguli specifice de ulei motor
+  pentru Honda (i-CTDi/i-DTEC) și Mitsubishi (DI-D) — la cererea explicită a utilizatorului, aplicate
+  chiar și acolo unde fallback-ul generic era deja conservator, nu doar unde era periculos ca la
+  Dacia (vezi mai jos), iar v18 a mai adăugat un lot: Fiat/Jeep MultiJet 1.6/2.0, Suzuki 1.9 DDiS
+  (ambele conservatoare) și **Porsche V6 TDI — a doua descoperire, după Dacia, de fallback prea
+  permisiv (periculos)**, iar v19 a adăugat Land Rover TDV6/TD4 (conservatoare) — Nissan M9R/R9M și
+  Jeep 3.0 CRD au fost verificate dar nu au primit regulă (surse conflictuale, vezi mai jos), iar
+  v20 a mai adăugat Fiat 1.3 MultiJet, Mitsubishi L200 4N15 și Land Rover Td5/TDV8/SDV6 (toate
+  conservatoare). **v21 e lotul final** (utilizatorul a cerut continuare autonomă până la
+  finalizarea întregului catalog): Toyota D-4D, PSA HDi/BlueHDi (interval diferit per generație) și
+  Volvo 2.4D/D5 (interval diferit per generație) — toate conservatoare; VW/Audi/Seat/Skoda TDI CR,
+  BMW, Mercedes OM6xx, Opel CDTI și Mazda Skyactiv-D au rămas fără regulă (surse conflictuale sau
+  insuficiente, vezi mai jos), iar v22 a reverificat Hyundai/Kia CRDi cu surse UK/EU specifice și
+  DE DATA ASTA a dat un rezultat suficient de consistent (15000 km/12 luni) pentru un fix — spre
+  deosebire de runda anterioară (v19, surse US/UK amestecate, ambigue), iar v23 a reverificat Renault
+  dCi cu surse UK specifice: K9K confirmat corect (egal cu fallback-ul generic), F9Q/M9R au primit
+  reguli diferite (fără FAP vs. cu FAP), iar v24 a reverificat Nissan M9R/R9M (rămas fără regulă —
+  conflict real de data asta, nu ambiguitate) și Jeep CRD (fix aplicat, sursă UK consistentă), iar
+  v25 a reverificat BMW diesel cu surse UK — de data asta fix aplicat (18000 mile/24 luni, sursă UK
+  consistentă), iar v26 a reverificat VW/Audi/Seat/Skoda TDI CR cu surse UK — fix aplicat (schema
+  Fixed, 15000 km/12 luni) pe toate cele 64 de motoare rămase, iar v27 a reverificat ultimele 4
+  cazuri ambigue (Nissan M9R/R9M, Mercedes OM6xx, Opel CDTI, Mazda Skyactiv-D) cu surse UK — Nissan
+  a rămas fără regulă (conflict real chiar și în surse UK), celelalte 3 au primit fix, iar v28 a
+  găsit motivul real al conflictului M9R (schimbare de schemă la o actualizare de model, sfârșit
+  2010) și a aplicat fix pe R9M (motorul mai nou care l-a înlocuit) — schema tabelelor rămânând
+  neschimbată pe tot parcursul, mai puțin faptul că `modele.generatie` e NULL peste tot din v15).
   **Atenție la migrații reutilizate:**
   `_createComponentRecordsTable` construiește schema originală v2 (fără coloanele custom*) fiindcă
   e refolosită de calea de upgrade `oldVersion<2` — `_onCreate` aplică deltele ulterioare (ALTER)
@@ -59,6 +84,203 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   Test de regresie: `test/ford_fiesta_test.dart` (rulează pe macOS cu sqflite FFI; limitarea FFI
   din nota de mai jos era specifică mediului Windows vechi — `widget_test.dart` însă tot pică,
   fiindcă nu-și inițializează singur factory-ul FFI).
+  **Verificare acuratețe intervale (v16):** la cererea utilizatorului, am eșantionat 111 motorizări
+  reale (15 modele comune, de la Dacia la BMW/Toyota hibrid) și am confirmat că fallback-ul generic
+  pentru "Ulei motor + filtru ulei" (`intervale_generice`, singurul folosit vreodată pentru ulei —
+  `intervale_mentenanta` avea reguli specifice per motor DOAR pentru distribuție, niciodată pentru
+  ulei, înainte de v16) era **identic (15000 km/12 luni) pe toate cele trei combustibili**
+  (Benzina/Diesel/Hibrid), deci deloc diferențiat per motor — confirmă disclaimer-ul din comentariul
+  de mai sus („orientative, nu preluate 1:1"). Am verificat prin căutare web (surse: Dacia
+  user-manual.dacia.com, BMW/VW forumuri oficiale) câteva cazuri: Dacia 1.5 dCi are interval oficial
+  **10.000 km/12 luni** (catalogul arăta 15.000 — greșit în direcția periculoasă, încuraja
+  sub-întreținere), BMW N20/N47 cu ulei Longlife-04 poate ajunge la ~30.000 km/24 luni (catalogul
+  conservator, sigur), VW TDI cu ulei 507 00 variază 15-30k după modul de service ales (catalogul
+  se potrivește cu modul „Fixed", conservator). Fix aplicat: (1) fallback-ul generic Diesel coborât
+  de la 15000 la 12000 km/12 luni (compromis mai realist pentru diesel fără ulei longlife, rămâne
+  conservator pentru cele cu longlife); (2) reguli specifice noi în `intervale_mentenanta` pentru
+  cele 6 motorizări Dacia K9K (dCi) — motor id 131/133 (Duster), 137/138 (Logan), 141/143
+  (Sandero) — suprascriu fallback-ul cu intervalul oficial verificat de 10.000 km/12 luni (view-ul
+  `mentenanta_completa` face deja COALESCE pe regula specifică înaintea celei generice, exact
+  mecanismul folosit pentru distribuție). Restul catalogului (peste 750 de motorizări) **rămâne
+  neverificat individual** — o verificare exhaustivă per motor față de manualele oficiale ale
+  fiecărui producător nu e fezabilă într-o singură trecere; eșantionul de mai sus e un sondaj de
+  încredere, nu o garanție completă. Teste de regresie: `test/get_engine_for_code_test.dart`.
+  **Continuare verificare + v17:** utilizatorul a cerut extinderea eșantionării la mai multe
+  branduri (Renault/Hyundai/Kia — ambigue, surse EU insuficient de clare, NU s-a aplicat niciun
+  fix; Ford/Peugeot/Citroen/Opel/Mercedes/Toyota/Fiat/Seat/Volvo/Mazda/Nissan/Land Rover/Škoda —
+  confirmate conservatoare, deci fără fix; Honda/Mitsubishi — vezi mai jos). Apoi utilizatorul a
+  cerut explicit ca fix-urile să se aplice **chiar și când fallback-ul generic era deja
+  conservator** (nu doar în direcția periculoasă ca la Dacia), ceea ce a dus la v17: reguli
+  specifice noi pentru Honda 2.2 i-CTDi/i-DTEC (motor id 202/204/207/209/215 → 20000 km/12 luni,
+  sursă AUTODOC) și 1.6 i-DTEC (motor id 217/219 → 15000 km/12 luni, sursă forum civinfo.com Civic
+  FK3), plus Mitsubishi DI-D 1.8/2.2 (motor id 414/421/424/426 → 20000 km/24 luni, surse forumuri
+  ASX/Outlander). **Încredere moderată** pe toate cele 3 (surse secundare/forumuri, nu manualul
+  oficial al producătorului ca la Dacia) — asumat explicit de utilizator. Motoarele Mitsubishi 4D68
+  (2.0 DI-D, Lancer vechi) și 4N15 (2.4 DI-D, L200 pickup) NU au regulă specifică — generații/motoare
+  diferite de cele acoperite de sursă, rămân pe fallback-ul generic. Verificat cu un test scratch
+  (șters după confirmare, nu există permanent în `test/`) că toate cele 11 rânduri noi se rezolvă
+  corect prin view-ul `mentenanta_completa`.
+  **v18 (alt lot):** Fiat/Jeep MultiJet 1.6 (motor id 155/157/159/161/169/280) și 2.0 (270) →
+  35000 km/24 luni (sursă: forumuri Fiat citând schema oficială — excepția „12 luni dacă uz urban
+  <10000 km/an" nu e modelată, doar valoarea standard); Suzuki 1.9 DDiS (617 RHZ Grand Vitara, 622
+  9HZ SX4 — extins de la RHZ) → 15000 km/12 luni (sursă auto-abc.eu). Ambele conservatoare
+  (catalogul era deja sub valoarea reală), încredere moderată. **Porsche V6 TDI Cayenne/Panamera**
+  (516/518/520/524, motor M55.01/CTBA/SCR-231/CKUA — aceeași platformă VW/Audi/Porsche) →
+  **7500 km/12 luni**, sursă documentație oficială Porsche citată pe 6speedonline/rennlist — **a
+  doua descoperire (după Dacia) de fallback prea permisiv**: catalogul avea 12000 km, deci mașinile
+  cu acest motor riscau să fie întreținute mai rar decât recomandarea reală a producătorului. NU
+  s-a extins la 1.3 DDiS Suzuki (Swift, D13A) sau la CRD 2.8/3.0 Jeep (Cherokee/Grand Cherokee,
+  familie de motor diferită, Iveco/VM) — fără sursă specifică pentru acestea. Verificat cu test
+  scratch (șters după confirmare) că toate cele 13 rânduri noi se rezolvă corect.
+  **v19 (alt lot):** Nissan M9R/R9M (X-Trail/Qashqai) și Jeep 3.0 CRD (Grand Cherokee, VM
+  Motori/Mercedes OM642) au fost cercetate dar au dat surse conflictuale — Nissan menționează
+  „12 luni/18k mile" ÎNTR-UN loc și „10.000 km" în alt manual (Australia); Jeep menționează
+  „Schedule A: 20.000 km" vs. „Schedule B: 10.000 km" după condiții de condus — la fel ca la
+  Renault/Hyundai-Kia mai devreme, nu există un singur număr de încredere, deci **nu s-a aplicat
+  nicio regulă**, catalogul rămâne pe fallback-ul generic. În schimb, Land Rover a dat numere clare:
+  **TDV6 3.0** (Discovery TDV6/2009 id 324, Range Rover Sport TDV6 id 336 — același motor) →
+  26.000 km/12 luni (sursă forum aulro.com); **TD4 2.0** (Discovery Sport 326, Freelander TD4 330,
+  Range Rover Evoque 334 — același motor TD4/Ingenium) → 34.000 km/24 luni (sursă
+  landroveranaheimhills.com). Ambele conservatoare, încredere moderată (surse secundare). NU extins
+  la Defender Td5 (319), Discovery TDV6/2004 (322, motor 2.7 mai vechi), Freelander L-Series (328),
+  Range Rover TDV8 (332) sau Range Rover Sport SDV6 (338) — generații/motoare diferite, fără sursă
+  specifică. Verificat cu test scratch (șters după confirmare) că toate cele 5 rânduri noi se
+  rezolvă corect.
+  **v20 (alt lot):** Fiat 1.3 MultiJet (Panda 163, Punto 167 — surse boards.ie/fiatforum.com) →
+  20.000 km/24 luni; Mitsubishi L200 4N15, generația KJ/KK/KL 2015+ (416, sursă auto-abc.eu/AUTODOC)
+  → 15.000 km/12 luni (generațiile mai vechi de L200, 2.5 DI-D/4D56, aveau 10.000 km, dar nu există
+  ca motor separat în catalog); Land Rover **Td5** (Defender, 319, sursă manual/twinwoods4x4.com) →
+  20.000 km/12 luni, **TDV8** (Range Rover, 332, sursă landyzone.co.uk, ~16.000 mile rotunjit) →
+  26.000 km/12 luni, **SDV6** (Range Rover Sport, 338, sursă roverparts.eu) → 15.000 km/12 luni.
+  Toate conservatoare, încredere moderată (surse secundare). NU extins la Discovery TDV6/2004 (322,
+  motor 2.7 mai vechi) sau Freelander L-Series 2.0 Di (328, altă familie de motor) — fără sursă
+  specifică. Verificat cu test scratch (șters după confirmare) că toate cele 6 rânduri noi se
+  rezolvă corect.
+  **v21 (lot final — continuare autonomă la cererea utilizatorului):** am trecut prin TOT restul
+  catalogului rămas neverificat, brand cu brand. Rezultat:
+  - **Toyota D-4D** (Auris 635, Avensis 639/640, Corolla 651/652, RAV4 659/661/663, Yaris 667) →
+    **15.000 km/12 luni**, sursă directă manual oficial Toyota Europa (manuals.plus, Yaris) +
+    confirmări forum. Încredere mai mare decât restul lotului (sursă primară găsită).
+  - **PSA HDi** (non-Blue, generație mai veche — toate motoarele Peugeot/Citroën codate DV4TD/DV6C/
+    DV6TED4/DW10TD/DW10BTED4/DW10FC fără „Blue" în denumire) → **20.000 km/12 luni**.
+  - **PSA BlueHDi** (generație Euro6+, denumire conține explicit „BlueHDi") → **26.000 km/12 luni**
+    (rotunjit din 16.000 mile; unele surse menționează până la 40.000 km/2 ani pe schemă flexibilă,
+    dar 26.000 km e valoarea „standard" mai des citată).
+  - **Volvo 2.4D/D5** (5 cilindri) — **generație veche** (S60 727 2000-2009, S80 732 2000-2006,
+    V70 742 2000-2007) → 20.000 km/12 luni; **generație nouă** (S80 734 2006-2016, V70 743
+    2007-2016, XC60 D5244T 750 2010-2017, XC90 754/756) → 30.000 km/12 luni. NU extins la motoarele
+    D4204T (platforma Drive-E, 2010+, complet diferită) — fără sursă specifică pentru acelea.
+  - **Rămase fără regulă** (cercetate dar surse conflictuale/insuficiente, la fel ca Renault/
+    Hyundai-Kia/Nissan/Jeep mai devreme): VW/Audi/Seat/Skoda 2.0 TDI CR (Longlife variabil,
+    9.000-30.000 mile după configurare), BMW (Condition Based Service, variază 10.000-18.000 mile),
+    Mercedes OM6xx (ASSYST PLUS variabil, Service A ~25.000 km/12 luni vs. Service B ~40.000 km/24
+    luni — prea diferite pentru un singur număr), Opel CDTI (surse contradictorii: 30.000 km vs.
+    16.000 km pentru aceleași coduri de motor Z-prefix), Mazda Skyactiv-D (nicio sursă diesel-
+    specifică găsită, doar date generice de manual american pentru benzină). Acestea rămân pe
+    fallback-ul generic Diesel (12.000 km/12 luni din v16) — **catalogul e considerat complet
+    verificat** la acest nivel de efort (eșantion + cercetare pe familii de motor, nu 1-la-1 pe
+    toate cele 763 de motorizări individuale — vezi disclaimer-ul de la v16).
+  Verificat cu test scratch (șters după confirmare) că toate cele 45 de rânduri noi (9 Toyota + 17
+  PSA HDi + 11 PSA BlueHDi + 8 Volvo) se rezolvă corect prin `mentenanta_completa`.
+  **v22 (reverificare Hyundai/Kia, la cerere explicită):** runda v19 (Renault/Hyundai-Kia
+  împreună) folosise căutări generice care amestecau piața US cu UK/EU, dând rezultate
+  contradictorii — de-aici decizia de a NU aplica niciun fix atunci. Reverificat separat, cu căutări
+  restrânse explicit la surse UK/hyundai-forums.com/i30ownersclub.com: **15.000 km/12 luni** apare
+  consistent și repetat pentru CRDi pe mai multe generații și modele (i30, Tucson, Santa Fe) —
+  suficient de solid pentru un fix, spre deosebire de v19. Există variații marginale citate (10.000
+  mile/~16.000 km pentru generația veche 2006-2009, ex. Santa Fe 2.2 CRDi D4EB; 20.000 mile/~32.000
+  km pentru modele UK mai noi), dar 15.000 km e valoarea de mijloc cea mai des confirmată, aplicată
+  uniform fără a separa pe generații (spre deosebire de PSA HDi/BlueHDi sau Volvo mai sus, unde
+  distincția generațională era suficient de clară). Aplicat pe **toate** motoarele CRDi Hyundai
+  ȘI Kia (D3EA/D4EA/D4EB/D4HA/D4HB/D4FA/D4FB/D4CB/D4FD/U2) — Hyundai și Kia partajează literalmente
+  aceleași motoare în grup (coduri identice D4FB/D4EA/D4FA/D4HA apar la ambele mărci în catalog).
+  25 de rânduri noi, verificate cu test scratch (șters după confirmare) că se rezolvă corect.
+  **v23 (reverificare Renault, la cerere explicită):** la fel ca la Hyundai, runda v19 amesteca
+  surse mai generice; reverificat cu surse UK specifice (daciaforum.co.uk, renaultforums.co.uk,
+  meganeownersclub.co.uk). Rezultat:
+  - **K9K** (Clio/Captur/Megane/Scenic, plus echivalentul Nissan Micra/Note/Qashqai) — sursă
+    oficială Renault UK (sistem OCS, citat pe daciaforum.co.uk): **12.000 km/12 luni** — coincide
+    EXACT cu fallback-ul generic Diesel (v16), deci **nu s-a adăugat nicio regulă nouă**, K9K e
+    confirmat corect așa cum e deja.
+  - **F9Q** (1.9 dCi, generație mai veche, FĂRĂ FAP/DPF de bază — Megane 552, Scenic 558) →
+    **29.000 km/12 luni** (sursă: 18.000 mile, renaultforums.co.uk).
+  - **M9R** (2.0/1.9 dCi, generație mai nouă, CU FAP/DPF de serie — Espace 545, Laguna 548/550) →
+    **14.500 km/12 luni** (sursă: 9.000 mile pentru motoarele cu filtru de particule, aceeași
+    sursă) — interval mai scurt din cauza diluării uleiului cu funingine la motoarele cu FAP.
+  - **F8Q** (Clio, 1.9 dCi vechi, indirect injection) — fără sursă specifică, rămâne pe fallback.
+  5 rânduri noi (2 F9Q + 3 M9R), verificate cu test scratch (șters după confirmare) — inclusiv
+  confirmarea explicită că K9K rămâne pe 12.000 km prin fallback, nu prin regulă redundantă.
+  **v24 (reverificare Nissan M9R/R9M + Jeep CRD, la cerere explicită):**
+  - **Nissan M9R/R9M — TOT fără regulă, dar de data asta e un conflict real, nu zgomot de
+    căutare.** Sursă UK Nissan (x-trail-uk.co.uk, X-Trail 2.0 dCi M9R 2012): 18.000 mile/12 luni
+    (~29.000 km). Problema: M9R e **literalmente același motor fizic** ca Renault M9R (alianța
+    Renault-Nissan), pentru care sursa UK Renault (v23) a dat 9.000 mile/~14.500 km (variantă cu
+    FAP). Două surse UK, pentru același motor, diferă de peste 2×— o contradicție reală între
+    branduri (poate un artefact al unor scheme de service diferite alese de fiecare producător
+    pentru același hardware), nu ambiguitate rezolvabilă prin căutare mai bună. Rămâne pe
+    fallback-ul generic (12.000 km). R9M (Qashqai 1.6 dCi) — nicio cifră găsită, fără sursă.
+  - **Jeep CRD (2.0/2.8/3.0, Compass/Patriot/Cherokee/Grand Cherokee)** → **20.000 km/12 luni**,
+    sursă site oficial Jeep UK (citată pe jeepgarage.org) — de data asta consistentă în interiorul
+    pieței UK (conflictul găsit anterior era între piața UK și cea Australia/SUA, nu un conflict
+    intern UK). Aplicat pe toate cele 6 motoare CRD din catalog (sursa nu diferențiază după
+    capacitate).
+  6 rânduri noi (toate Jeep CRD), verificate cu test scratch (șters după confirmare) — inclusiv
+  confirmarea explicită că Nissan M9R rămâne pe 12.000 km prin fallback.
+  **v25 (reverificare BMW, la cerere explicită):** runda anterioară descrisese doar „Condition
+  Based Service, variază 10.000-18.000 mile" fără o cifră unică de încredere. Reverificat cu surse
+  UK specifice (pistonheads.com, bimmerforums.co.uk, bmwccgbforum.co.uk) — **de data asta două
+  surse UK independente converg pe aceeași cifră oficială**: schema de service BMW UK e **18.000
+  mile/24 luni** (~29.000 km/24 luni), cifra la care se aprinde de regulă lumina CBS. Mențiuni de
+  „10-16k mile" sau „9-10k mile" apărute în aceleași căutări sunt practică independentă a
+  mecanicilor/proprietarilor îngrijorați de longevitatea turbinei (schimbări mai dese decât oficial
+  recomandat), NU cifra oficială BMW — nu au fost folosite pentru fix. Aplicat pe toate cele 26 de
+  motoare diesel BMW din catalog (M47/N47/B47/M57/N57/B57 — schema CBS/18k se aplică generic pe
+  toată gama diesel UK, nu doar 320d). 26 de rânduri noi, verificate cu test scratch (șters după
+  confirmare).
+  **v26 (reverificare VW/Audi/Seat/Skoda TDI CR, la cerere explicită):** rundele anterioare
+  descriau doar schema Longlife/Variable (9.000-30.000 mile după configurare), prea largă pentru
+  un număr unic de încredere. Reverificat cu surse UK specifice (honestjohn.co.uk, elginvw.com,
+  sunset-derby.co.uk, rwcmotorsport.com) — de data asta sursele converg pe schema **Fixed** ca
+  fiind cea mai des documentată/„standard": 10.000 mile (~16.000 km, o sursă) / 15.000 km (altă
+  sursă, honestjohn.co.uk, citând handbook-ul), 12 luni — suficient de consistente pentru un fix
+  (**15.000 km/12 luni**). Schema Variable/Longlife (până la 30.000 km) rămâne opțiunea implicită
+  din fabrică pentru mașinile noi din UK, dar Fixed e alegerea recomandată pentru uz redus și e cea
+  documentată explicit — aleasă aici ca fiind mai sigură (interval mai scurt), la fel ca la
+  celelalte fix-uri din acest catalog. Aplicat pe toate cele **64 de motoare TDI CR** rămase din
+  cele 4 branduri VAG (20 Audi + 11 Seat + 11 Skoda + 22 Volkswagen — codurile BKD/CRBC/DTVA/BRE/
+  CAGA/DETA/CAHA/CGLC/BMC/DIGB/DFHA/CASA/DCUA/AMF/ASY/CFWA/ASV/CBDB/CLHA/AVF/CFGB/DFGA/ALH/DFSA/
+  DGEA/BKC/CUPA/AVB/BMP/CFFB/DEZA/CFHC). 64 de rânduri noi, verificate cu test scratch (șters după
+  confirmare).
+  **v27 (reverificare Nissan M9R/R9M + Mercedes + Opel + Mazda, la cerere explicită):**
+  - **Nissan M9R/R9M — TOT fără regulă**, dar situația e mai clară acum: sursa UK cea mai nouă
+    (x-trail-uk.co.uk) dă „12.500 mile/12 luni", dar și „18.000 mile, confirmat de Nissan Customer
+    Service pentru anumiți ani de model" — conflict chiar și în interiorul surselor Nissan UK
+    proprii, peste conflictul deja cunoscut cu Renault M9R (același motor fizic, 9.000 mile, v23).
+    Rămâne pe fallback (12.000 km) — nu există un număr unic de încredere.
+  - **Mercedes OM651/OM654** (4 cilindri moderne — NU și OM656 V6/clasă diferită, nici motoarele
+    vechi OM613/OM612/OM640/OM642/OM646/OM608) → **24.000 km/12 luni** (sursă: 15.000 mile,
+    pistonheads.com/mbclub.co.uk, E220d) — de data asta o cifră unică și consistentă, spre
+    deosebire de runda anterioară (Service A ~25.000 km vs. Service B ~40.000 km).
+  - **Opel/Vauxhall CDTI** — distincție clară pe mărime/generație: modele mici/vechi (Astra
+    Z19DTH/A17DTJ/B16DTH, Corsa Z13DTH/A17DTC, Zafira Z19DTH) → **16.000 km/12 luni** (10.000
+    mile); Insignia (A20DTH/B16DTH) → **32.000 km/12 luni** (20.000 mile). DV6FD (Astra/Grandland,
+    motor PSA BlueHDi post-Stellantis, cod identic cu cel de la Peugeot/Citroën) → **26.000 km/12
+    luni**, extins pentru consistență cu fixul din v21. Motoarele Y-prefix (Y17DT/Y20DTH,
+    generația cea mai veche, pre-CDTI) rămân fără sursă.
+  - **Mazda Skyactiv-D** (NU și motoarele vechi MZ-CD/MZR-CD) → **20.000 km/12 luni** (12.000-
+    12.500 mile, consistent între mai multe citări UK/EU de data asta).
+  26 de rânduri noi, verificate cu test scratch (șters după confirmare) — inclusiv confirmarea că
+  Nissan M9R rămâne pe fallback.
+  **v28 (Nissan, reverificare finală):** am găsit explicația reală a conflictului M9R —
+  intervalul X-Trail s-a schimbat la o actualizare de model de la sfârșitul lui 2010 (12.500 mile
+  înainte → 18.000 mile după), iar motorul M9R din catalog acoperă exact 2007-2014, traversând acel
+  prag — deci nu poate primi un număr unic fără să știm anul exact al mașinii (catalogul nu ține
+  evidența anului per vehicul individual, doar intervalul motorului). **Rămâne pe fallback**,
+  documentat acum cu motivul precis, nu doar ca „ambiguu". În schimb, **R9M** (Qashqai 1.6 dCi,
+  2014+, motorul mai nou care l-a înlocuit pe M9R) are o sursă curată — interval european
+  ~30.000 km/12 luni citat explicit — **fix aplicat** (motor id 450, singura intrare R9M din
+  catalog, pe X-Trail). Verificat cu test scratch (șters după confirmare) că R9M primește regula
+  nouă și M9R rămâne corect pe fallback.
   Istoric pre-v15 (structură pe generații, 448 modele): datele v11–v14 veneau din
   `auto_mentenanta_3.sql` — **atenție,
   numele de fișier e reciclat**: v8 folosea tot `auto_mentenanta_3.sql` dar cu conținut complet diferit și

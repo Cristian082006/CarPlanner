@@ -30,7 +30,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'car_planner.db');
     return openDatabase(
       path,
-      version: 15,
+      version: 28,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -207,6 +207,233 @@ class DatabaseHelper {
       // utilizator la v13, re-adăugate manual fiindcă lipsesc din exportul
       // consolidat). Coloana `generatie` rămâne în schemă dar e NULL peste
       // tot. Același drop+reseed ca la actualizările anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 16) {
+      // v16 corectează intervalul de ulei motor pentru diesel: fallback-ul
+      // generic era identic cu cel de benzină (15000/12) pentru toate
+      // combustibilurile — verificat cu manualul oficial Dacia (dCi: 10000
+      // km/12 luni), scăzut la 12000/12 ca compromis mai realist pentru
+      // diesel fără ulei longlife. Adaugă și reguli specifice pe motor
+      // pentru Dacia K9K (dCi), suprascriind fallback-ul cu intervalul
+      // oficial verificat de 10000 km. Același drop+reseed ca la
+      // actualizările anterioare (date de catalog, nu ale utilizatorului).
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 17) {
+      // v17: la cererea explicită a utilizatorului, aplică intervalul real
+      // de ulei motor găsit prin cercetare web ȘI acolo unde fallback-ul
+      // generic era deja conservator (nu doar acolo unde era periculos, ca
+      // la Dacia în v16) — Honda 2.2 i-CTDi/i-DTEC (20000 km/12 luni) și 1.6
+      // i-DTEC (15000 km/12 luni), Mitsubishi 4N13/4N14 DI-D (20000 km/24
+      // luni). Surse secundare (forumuri), încredere moderată — vezi
+      // comentariile din vehicle_reference_data.dart. Același drop+reseed ca
+      // la actualizările anterioare (date de catalog, nu ale utilizatorului).
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 18) {
+      // v18: încă un lot de motorizări verificate la cererea utilizatorului —
+      // Fiat/Jeep 1.6+2.0 MultiJet (35000 km/24 luni, conservator/sigur ca
+      // Honda/Mitsubishi), Suzuki 1.9 DDiS (15000 km/12 luni, conservator),
+      // și Porsche V6 TDI (Cayenne/Panamera, 7500 km/12 luni) — ACESTA din
+      // urmă e în direcția PERICULOASĂ față de fallback-ul generic (12000
+      // km), la fel ca Dacia în v16. Vezi comentariile din
+      // vehicle_reference_data.dart pentru surse și nivel de încredere.
+      // Același drop+reseed ca la actualizările anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 19) {
+      // v19: alt lot verificat la cererea utilizatorului — Land Rover TDV6
+      // (26000 km/12 luni) și TD4 (34000 km/24 luni), ambele conservatoare.
+      // Nissan M9R/R9M și Jeep 3.0 CRD au fost verificate dar NU au primit
+      // regulă — surse conflictuale (schedule A/B diferite după condiții),
+      // fără un număr unic de încredere (la fel ca Renault/Hyundai-Kia mai
+      // devreme). Vezi comentariile din vehicle_reference_data.dart. Același
+      // drop+reseed ca la actualizările anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 20) {
+      // v20: alt lot verificat la cererea utilizatorului — Fiat 1.3 MultiJet
+      // (20000 km/24 luni), Mitsubishi L200 4N15 (15000 km/12 luni), Land
+      // Rover Td5/TDV8/SDV6 (20000/26000/15000 km, toate 12 luni) — toate
+      // conservatoare (peste fallback-ul generic). Vezi comentariile din
+      // vehicle_reference_data.dart pentru surse și încredere. Același
+      // drop+reseed ca la actualizările anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 21) {
+      // v21: lot final (utilizatorul a cerut continuare autonomă până la
+      // finalizarea întregului catalog) — Toyota D-4D (15000 km/12 luni),
+      // PSA HDi (20000 km/12 luni) vs BlueHDi (26000 km/12 luni), Volvo
+      // 2.4D/D5 generație veche (20000 km) vs nouă (30000 km). VW/Audi/Seat/
+      // Skoda TDI CR, BMW, Mercedes OM6xx, Opel CDTI și Mazda Skyactiv-D au
+      // fost cercetate dar au dat surse conflictuale/insuficiente — nicio
+      // regulă aplicată pentru acestea. Vezi comentariile din
+      // vehicle_reference_data.dart. Același drop+reseed ca la actualizările
+      // anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 22) {
+      // v22: reverificare Hyundai/Kia CRDi la cererea utilizatorului — de
+      // data asta cu surse UK/EU specifice (nu amestecate US/UK ca la runda
+      // Renault/Hyundai-Kia din v19), a dat un rezultat suficient de
+      // consistent (15000 km/12 luni) pentru a aplica un fix, spre deosebire
+      // de runda anterioară. Aplicat pe toate motoarele CRDi Hyundai ȘI Kia
+      // (motor partajat în grup). Vezi comentariile din
+      // vehicle_reference_data.dart. Același drop+reseed ca la actualizările
+      // anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 23) {
+      // v23: reverificare Renault dCi la cererea utilizatorului, cu surse UK
+      // specifice — K9K confirmat corect (12000 km, egal cu fallback-ul
+      // generic, nicio regulă nouă necesară); F9Q (fără FAP) → 29000 km/12
+      // luni; M9R (cu FAP) → 14500 km/12 luni. Vezi comentariile din
+      // vehicle_reference_data.dart. Același drop+reseed ca la actualizările
+      // anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 24) {
+      // v24: reverificare Nissan M9R/R9M și Jeep CRD cu surse UK, la cererea
+      // utilizatorului. Nissan M9R rămâne fără regulă — conflict real între
+      // sursa UK Nissan (18000 mile) și sursa UK Renault pentru ACELAȘI motor
+      // fizic M9R (9000 mile, v23), nu ambiguitate rezolvabilă. Jeep CRD (toate
+      // capacitățile) → 20000 km/12 luni, sursă UK consistentă de data asta.
+      // Vezi comentariile din vehicle_reference_data.dart. Același
+      // drop+reseed ca la actualizările anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 25) {
+      // v25: reverificare BMW diesel cu surse UK, la cererea utilizatorului —
+      // de data asta două surse UK independente converg pe aceeași cifră
+      // oficială (schema de service BMW UK: 18000 mile/24 luni, ~29000
+      // km/24 luni), spre deosebire de runda anterioară care descria doar
+      // "Condition Based Service variabil" fără un număr. Aplicat pe toate
+      // cele 26 de motoare diesel BMW din catalog. Vezi comentariile din
+      // vehicle_reference_data.dart. Același drop+reseed ca la actualizările
+      // anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 26) {
+      // v26: reverificare VW/Audi/Seat/Skoda (VAG) TDI CR cu surse UK, la
+      // cererea utilizatorului — de data asta sursele UK converg pe schema
+      // Fixed (15000 km/12 luni) ca fiind cea mai des documentată, spre
+      // deosebire de rundele anterioare (Longlife/Variable, prea variabil
+      // pentru un număr unic). Aplicat pe toate cele 64 de motoare TDI CR
+      // rămase din cele 4 branduri VAG. Vezi comentariile din
+      // vehicle_reference_data.dart. Același drop+reseed ca la actualizările
+      // anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 27) {
+      // v27: reverificare Nissan M9R/R9M, Mercedes OM6xx, Opel CDTI, Mazda
+      // Skyactiv-D cu surse UK, la cererea utilizatorului. Nissan rămâne fără
+      // regulă (conflict chiar și în interiorul surselor UK). Mercedes
+      // OM651/OM654, Opel CDTI (diferențiat mic/vechi vs. Insignia, plus
+      // DV6FD extins de la fixul PSA v21) și Mazda Skyactiv-D au primit
+      // reguli noi. Vezi comentariile din vehicle_reference_data.dart.
+      // Același drop+reseed ca la actualizările anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 28) {
+      // v28: reverificare finală Nissan, la cererea utilizatorului. M9R
+      // rămâne fără regulă — conflictul e explicat de o schimbare reală de
+      // schemă la o actualizare de model (sfârșit 2010), iar motorul din
+      // catalog (2007-2014) traversează exact acel prag. R9M (Qashqai 1.6
+      // dCi, mai nou) a primit fix: 30000 km/12 luni. Vezi comentariile din
+      // vehicle_reference_data.dart. Același drop+reseed ca la
+      // actualizările anterioare.
       await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
       await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
       await db.execute('DROP TABLE IF EXISTS intervale_generice');
@@ -555,11 +782,22 @@ class DatabaseHelper {
 
   // ---------- Reference data (cod motor → marcă/model/motor/intervale) ----------
 
-  /// Primul motor de referință care folosește [engineCode] (poate exista mai
-  /// mult de unul — același cod scurt apare uneori la mărci/modele diferite
-  /// cu specificații ușor diferite; luăm primul, e doar pentru afișare și
-  /// pentru a rezolva intervalele lui). `null` dacă nu are nicio potrivire.
-  Future<Map<String, Object?>?> getEngineForCode(String? engineCode) async {
+  /// Motorul de referință care folosește [engineCode] — poate exista mai
+  /// mult de unul cu același cod scurt, fiindcă mărci înrudite (ex. VW/Seat/
+  /// Škoda pe platforme comune) partajează literalmente aceleași motoare
+  /// (ex. Polo și Ibiza). Fără [make]/[model], am lua orbește primul rând
+  /// din catalog (după `id`), ceea ce putea aplica din greșeală profilul
+  /// altui model doar fiindcă avea un id mai mic — bug real reprodus pe un
+  /// Polo care primea intervalele unui Seat Ibiza. Cu [make]/[model]
+  /// completate, preferăm întâi un rând cu marcă+model exacte, apoi doar
+  /// marcă, și abia dacă niciunul nu se potrivește cădem pe primul rând
+  /// găsit (păstrează comportamentul vechi ca ultim fallback). `null` dacă
+  /// [engineCode] nu are nicio potrivire în catalog.
+  Future<Map<String, Object?>?> getEngineForCode(
+    String? engineCode, {
+    String? make,
+    String? model,
+  }) async {
     if (engineCode == null) return null;
     final key = normalizeEngineCode(engineCode);
     if (key.isEmpty) return null;
@@ -571,9 +809,29 @@ class DatabaseHelper {
       JOIN marci ma ON ma.id = mo.marca_id
       WHERE mt.cod_motor_key = ?
       ORDER BY mt.id
-      LIMIT 1
     ''', [key]);
-    return rows.isEmpty ? null : rows.first;
+    if (rows.isEmpty) return null;
+    if (rows.length == 1) return rows.first;
+
+    final normalizedMake = make?.trim().toLowerCase();
+    final normalizedModel = model?.trim().toLowerCase();
+    if (normalizedMake != null && normalizedMake.isNotEmpty) {
+      for (final row in rows) {
+        final rowMake = (row['marca_nume'] as String?)?.trim().toLowerCase();
+        final rowModel = (row['model_nume'] as String?)?.trim().toLowerCase();
+        if (rowMake == normalizedMake &&
+            normalizedModel != null &&
+            normalizedModel.isNotEmpty &&
+            rowModel == normalizedModel) {
+          return row;
+        }
+      }
+      for (final row in rows) {
+        final rowMake = (row['marca_nume'] as String?)?.trim().toLowerCase();
+        if (rowMake == normalizedMake) return row;
+      }
+    }
+    return rows.first;
   }
 
   /// Toate rândurile din view-ul `mentenanta_completa` pentru motorul

@@ -87,7 +87,6 @@ extension DocumentTypeX on DocumentType {
 /// Zile înainte de expirare la care se trimite o notificare de atenționare.
 const List<int> reminderLeadDays = [14, 3];
 
-const Color kPrimaryColor = Color(0xFF2D6A4F);
 const Color kDangerColor = Color(0xFFD62828);
 const Color kWarningColor = Color(0xFFF77F00);
 const Color kOkColor = Color(0xFF2D6A4F);

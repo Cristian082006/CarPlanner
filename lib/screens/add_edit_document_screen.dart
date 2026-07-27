@@ -46,7 +46,28 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
 
   List<DocumentType> get _availableTypes => _isForVehicle
       ? [DocumentType.rca, DocumentType.casco, DocumentType.rovinieta, DocumentType.itp, DocumentType.other]
-      : [DocumentType.homeInsurance, DocumentType.other];
+      : [
+          DocumentType.homeInsurance,
+          DocumentType.propertyTax,
+          DocumentType.heatingInspection,
+          DocumentType.gasCheck,
+          DocumentType.other,
+        ];
+
+  /// Următoarea dată de 31 martie (anul curent dacă termenul n-a trecut încă,
+  /// altfel anul viitor) — termenul legal pentru impozitul pe clădire/teren.
+  DateTime _nextMarch31() {
+    final now = DateTime.now();
+    final thisYear = DateTime(now.year, 3, 31);
+    return now.isAfter(thisYear) ? DateTime(now.year + 1, 3, 31) : thisYear;
+  }
+
+  void _applyDefaultExpiryForType(DocumentType type) {
+    if (_expiryDateTouched || _isEditing) return;
+    if (type == DocumentType.propertyTax) {
+      _expiryDate = _nextMarch31();
+    }
+  }
 
   @override
   void initState() {
@@ -61,6 +82,7 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
     _startDate = d?.startDate;
     _expiryDate = d?.expiryDate ?? _expiryDate;
     _photoPath = d?.photoPath;
+    _applyDefaultExpiryForType(_type);
     if (widget.vehicleId != null) _loadVehicle();
   }
 
@@ -206,7 +228,10 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
               items: _availableTypes
                   .map((t) => DropdownMenuItem(value: t, child: Text(t.label)))
                   .toList(),
-              onChanged: (v) => setState(() => _type = v!),
+              onChanged: (v) => setState(() {
+                _type = v!;
+                _applyDefaultExpiryForType(_type);
+              }),
             ),
             const SizedBox(height: 12),
             TextFormField(

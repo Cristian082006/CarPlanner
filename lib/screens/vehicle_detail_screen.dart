@@ -204,7 +204,7 @@ class _InfoTab extends StatelessWidget {
       }
     }
 
-    final engine = await db.getEngineForCode(engineCode);
+    final engine = await db.getEngineForCode(engineCode, make: vehicle.make, model: vehicle.model);
     final engineRows = engine != null
         ? await db.getMaintenanceIntervalsForMotorId(engine['id'] as int)
         : <Map<String, Object?>>[];
@@ -393,6 +393,7 @@ class _RecordsTab extends StatelessWidget {
               },
             ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'serviceRecordFab',
         onPressed: () async {
           await Navigator.push(
             context,
@@ -441,6 +442,7 @@ class _DocumentsTab extends StatelessWidget {
               },
             ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'vehicleDocumentsFab',
         onPressed: () async {
           await Navigator.push(
             context,

@@ -25,9 +25,17 @@ class S {
   static String get deletedCar => _ro ? 'Mașină ștearsă' : 'Deleted car';
   static String get yourCar => _ro ? 'Mașina ta' : 'Your car';
 
+  // ---------- Bottom navigation ----------
+  static String get navHome => _ro ? 'Acasă' : 'Home';
+  static String get navGarage => _ro ? 'Mașini' : 'Cars';
+  static String get navHouse => _ro ? 'Casă' : 'House';
+  static String get navCosts => _ro ? 'Costuri' : 'Costs';
+  static String get navSettings => _ro ? 'Setări' : 'Settings';
+
   // ---------- Home screen ----------
-  static String get remindersTooltip => _ro ? 'Remindere' : 'Reminders';
   static String get alertsHeader => _ro ? 'Atenționări' : 'Alerts';
+  static String get allUpToDate =>
+      _ro ? 'Totul e la zi. Nicio atenționare în următoarele 30 de zile.' : 'All up to date. No alerts in the next 30 days.';
   static String get myCarsHeader => _ro ? 'Mașinile mele' : 'My Cars';
   static String get noCarsYet => _ro
       ? 'Nu ai adăugat nicio mașină încă. Apasă pe + pentru a adăuga prima mașină.'
@@ -35,10 +43,15 @@ class S {
   static String get addVehicleDocumentsShortcut => _ro
       ? 'Adaugă RCA / CASCO / ITP / Rovinietă'
       : 'Add insurance / inspection documents';
+  static String get houseWarningsHeader => _ro ? 'Avertizări casă' : 'House warnings';
+  static String get noHouseWarnings => _ro
+      ? 'Niciun document de locuință adăugat încă.'
+      : 'No home documents added yet.';
+  static String get seeAll => _ro ? 'Vezi toate' : 'See all';
   static String get houseHeader => _ro ? 'Casă' : 'House';
   static String get addHomeInsurance => _ro
-      ? 'Adaugă asigurare locuință / alt document'
-      : 'Add home insurance / other document';
+      ? 'Adaugă asigurare, impozit, verificări sau alt document'
+      : 'Add insurance, tax, inspections or other document';
   static String get homeLabel => _ro ? 'Locuință' : 'Home';
 
   // ---------- Vehicle detail screen ----------
@@ -182,14 +195,43 @@ class S {
   static String get title => _ro ? 'Titlu' : 'Title';
   static String get linkedCarOptional => _ro ? 'Mașină asociată — opțional' : 'Linked car — optional';
 
-  // ---------- Reminders screen ----------
-  static String get remindersTitle => _ro ? 'Remindere' : 'Reminders';
+  // ---------- Reminders (now a Home section) ----------
   static String get personalReminders => _ro ? 'Remindere personale' : 'Personal reminders';
   static String get noPersonalReminders =>
       _ro ? 'Nu ai niciun reminder personal.' : 'You have no personal reminders.';
   static String get automaticAlerts => _ro ? 'Atenționări automate' : 'Automatic alerts';
   static String get nothingToTrack => _ro ? 'Nimic de urmărit momentan.' : 'Nothing to track right now.';
   static String get reminder => _ro ? 'Reminder' : 'Reminder';
+  static String get addReminderTooltip => _ro ? 'Adaugă reminder' : 'Add reminder';
+
+  // ---------- Costs & calendar screen ----------
+  static String get costsTabLabel => _ro ? 'Costuri' : 'Costs';
+  static String get calendarTabLabel => _ro ? 'Calendar' : 'Calendar';
+  static String get totalCosts => _ro ? 'Total cheltuieli' : 'Total costs';
+  static String get noCostsRecorded => _ro
+      ? 'Nicio cheltuială înregistrată încă. Adaugă un cost la o revizie sau un document.'
+      : 'No costs recorded yet. Add a cost on a service record or a document.';
+  static String get serviceCostsLabel => _ro ? 'Revizii' : 'Service';
+  static String get documentCostsLabel => _ro ? 'Documente' : 'Documents';
+  static String get noEventsThisMonth =>
+      _ro ? 'Nimic programat în luna asta.' : 'Nothing scheduled this month.';
+  static String get selectDayHint =>
+      _ro ? 'Atinge o zi pentru a vedea ce e programat.' : 'Tap a day to see what\'s scheduled.';
+  static String get noEventsThisDay =>
+      _ro ? 'Nimic programat în această zi.' : 'Nothing scheduled on this day.';
+  static const List<String> _monthsRo = [
+    'Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
+    'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie',
+  ];
+  static const List<String> _monthsEn = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  static String monthYearLabel(int month, int year) =>
+      '${(_ro ? _monthsRo : _monthsEn)[month - 1]} $year';
+  static const List<String> _weekdaysRo = ['L', 'Ma', 'Mi', 'J', 'V', 'S', 'D'];
+  static const List<String> _weekdaysEn = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  static List<String> get weekdayShortLabels => _ro ? _weekdaysRo : _weekdaysEn;
 
   // ---------- Component tracker ----------
   static String recommendedInterval(String interval) =>
@@ -314,20 +356,20 @@ class S {
 
   // ---------- Settings screen ----------
   static String get settingsTitle => _ro ? 'Setări' : 'Settings';
-  static String get countryLabel => _ro ? 'Țară' : 'Country';
-  static String get countryDescription => _ro
-      ? 'Alege țara ta ca să vezi aplicația în limba și cu denumirile de documente potrivite. România păstrează RCA/CASCO/ITP/Rovinietă; orice altă țară primește denumiri generice, în engleză.'
-      : 'Choose your country to see the app in the right language and with matching document names. Romania keeps RCA/CASCO/ITP/Rovinietă; any other country gets generic English names.';
-  static String get chooseCountry => _ro ? 'Alege țara' : 'Choose country';
-  static String get romaniaOptionTitle => 'România';
-  static String get romaniaOptionSubtitle =>
+  static String get languageSectionHeader => _ro ? 'Limbă' : 'Language';
+  static String get languageDescription => _ro
+      ? 'Alege limba aplicației și denumirile de documente potrivite. Româna păstrează RCA/CASCO/ITP/Rovinietă; Engleza folosește denumiri generice.'
+      : 'Choose the app language and matching document names. Romanian keeps RCA/CASCO/ITP/Rovinietă; English uses generic names.';
+  static String get romanianLanguageTitle => _ro ? 'Română' : 'Romanian';
+  static String get romanianLanguageSubtitle =>
       _ro ? 'RCA, CASCO, ITP, Rovinietă' : 'RCA, CASCO, ITP, Rovinietă';
-  static String get internationalOptionTitle =>
-      _ro ? 'Alte țări (Internațional)' : 'Other countries (International)';
-  static String get internationalOptionSubtitle => _ro
-      ? 'Denumiri generice, în engleză'
-      : 'Generic names, in English';
-  static String get futureCountriesNote => _ro
-      ? 'Denumiri specifice pentru mai multe țări vor fi adăugate într-o versiune viitoare.'
-      : 'Country-specific names for more countries will be added in a future update.';
+  static String get englishLanguageTitle => _ro ? 'Engleză' : 'English';
+  static String get englishLanguageSubtitle =>
+      _ro ? 'Denumiri generice, în engleză' : 'Generic names, in English';
+  static String get moreLanguagesNote => _ro
+      ? 'Mai multe limbi vor fi adăugate într-o versiune viitoare.'
+      : 'More languages will be added in a future update.';
+  static String get contactSectionHeader => _ro ? 'Contact' : 'Contact';
+  static String get contactComingSoon =>
+      _ro ? 'Detalii de contact — în curând.' : 'Contact details — coming soon.';
 }

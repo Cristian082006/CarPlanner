@@ -20,34 +20,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ValueListenableBuilder<String>(
         valueListenable: _region.countryCode,
         builder: (context, countryCode, _) {
-          final isRomania = countryCode == 'RO';
+          final isRomanian = countryCode == 'RO';
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(S.countryDescription, style: Theme.of(context).textTheme.bodyMedium),
+              _SectionHeader(S.languageSectionHeader),
+              Text(S.languageDescription, style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 20),
-              _CountryOption(
+              _LanguageOption(
                 flag: '🇷🇴',
-                title: S.romaniaOptionTitle,
-                subtitle: S.romaniaOptionSubtitle,
-                selected: isRomania,
+                title: S.romanianLanguageTitle,
+                subtitle: S.romanianLanguageSubtitle,
+                selected: isRomanian,
                 onTap: () => _region.setCountryCode('RO'),
               ),
               const SizedBox(height: 12),
-              _CountryOption(
+              _LanguageOption(
                 flag: '🌍',
-                title: S.internationalOptionTitle,
-                subtitle: S.internationalOptionSubtitle,
-                selected: !isRomania,
+                title: S.englishLanguageTitle,
+                subtitle: S.englishLanguageSubtitle,
+                selected: !isRomanian,
                 onTap: () => _region.setCountryCode('INTL'),
               ),
               const SizedBox(height: 20),
               Text(
-                S.futureCountriesNote,
+                S.moreLanguagesNote,
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
                     ?.copyWith(color: Colors.grey[600], fontStyle: FontStyle.italic),
+              ),
+              const SizedBox(height: 32),
+              _SectionHeader(S.contactSectionHeader),
+              Text(
+                S.contactComingSoon,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Colors.grey[600]),
               ),
             ],
           );
@@ -57,14 +67,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class _CountryOption extends StatelessWidget {
+class _SectionHeader extends StatelessWidget {
+  final String title;
+
+  const _SectionHeader(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
+class _LanguageOption extends StatelessWidget {
   final String flag;
   final String title;
   final String subtitle;
   final bool selected;
   final VoidCallback onTap;
 
-  const _CountryOption({
+  const _LanguageOption({
     required this.flag,
     required this.title,
     required this.subtitle,

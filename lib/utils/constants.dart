@@ -2,7 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../services/region_service.dart';
 
-enum DocumentType { rca, casco, rovinieta, itp, homeInsurance, other }
+enum DocumentType {
+  rca,
+  casco,
+  rovinieta,
+  itp,
+  homeInsurance,
+  propertyTax,
+  heatingInspection,
+  gasCheck,
+  other,
+}
+
+/// Tipuri de document care nu țin de o mașină anume (secțiunea „Casă” de pe
+/// ecranul principal) — folosit de `requiresVehicle` mai jos.
+const Set<DocumentType> _nonVehicleDocumentTypes = {
+  DocumentType.homeInsurance,
+  DocumentType.propertyTax,
+  DocumentType.heatingInspection,
+  DocumentType.gasCheck,
+};
 
 extension DocumentTypeX on DocumentType {
   /// România păstrează denumirile locale (RCA/CASCO/ITP/Rovinietă); orice
@@ -20,6 +39,14 @@ extension DocumentTypeX on DocumentType {
         return isRomania ? 'ITP' : 'Technical Inspection';
       case DocumentType.homeInsurance:
         return isRomania ? 'Asigurare locuință' : 'Home Insurance';
+      case DocumentType.propertyTax:
+        return isRomania ? 'Impozit clădire/teren' : 'Property Tax';
+      case DocumentType.heatingInspection:
+        return isRomania
+            ? 'Revizie centrală termică / coș de fum'
+            : 'Heating System / Chimney Inspection';
+      case DocumentType.gasCheck:
+        return isRomania ? 'Verificare instalație gaz' : 'Gas Installation Check';
       case DocumentType.other:
         return isRomania ? 'Alt document' : 'Other Document';
     }
@@ -36,12 +63,18 @@ extension DocumentTypeX on DocumentType {
         return Icons.fact_check_outlined;
       case DocumentType.homeInsurance:
         return Icons.home_outlined;
+      case DocumentType.propertyTax:
+        return Icons.account_balance_outlined;
+      case DocumentType.heatingInspection:
+        return Icons.local_fire_department_outlined;
+      case DocumentType.gasCheck:
+        return Icons.gas_meter_outlined;
       case DocumentType.other:
         return Icons.description_outlined;
     }
   }
 
-  bool get requiresVehicle => this != DocumentType.homeInsurance;
+  bool get requiresVehicle => !_nonVehicleDocumentTypes.contains(this);
 
   static DocumentType fromName(String name) {
     return DocumentType.values.firstWhere(

@@ -372,4 +372,23 @@ class S {
   static String get contactSectionHeader => _ro ? 'Contact' : 'Contact';
   static String get contactComingSoon =>
       _ro ? 'Detalii de contact — în curând.' : 'Contact details — coming soon.';
+  static String get versionSectionHeader => _ro ? 'Despre' : 'About';
+  static String get appVersionLabel => _ro ? 'Versiune 1.0' : 'Version 1.0';
+  static String get feedbackSectionHeader => _ro ? 'Feedback' : 'Feedback';
+  static String get feedbackDescription => _ro
+      ? 'Ai găsit o problemă sau ai o sugestie? Trimite-mi un email direct din aplicație.'
+      : 'Found a bug or have a suggestion? Send me an email directly from the app.';
+  static String get sendFeedbackButton => _ro ? 'Trimite feedback' : 'Send feedback';
+  static String get feedbackEmailSubject =>
+      _ro ? 'CarPlanner - Feedback' : 'CarPlanner - Feedback';
+  static String get feedbackLaunchFailed => _ro
+      ? 'Nu am putut deschide aplicația de email.'
+      : 'Could not open the email app.';
+  static String get sendErrorLogButton =>
+      _ro ? 'Trimite jurnal erori' : 'Send error log';
+  static String get errorLogDescription => _ro
+      ? 'Jurnalul de erori rămâne mereu doar pe telefon — nu se trimite nicăieri automat. Îl poți atașa manual la un email dacă întâmpini o problemă.'
+      : 'The error log always stays on the phone only — nothing is sent automatically. You can attach it manually to an email if you run into an issue.';
+  static String get noErrorLogEntries =>
+      _ro ? 'Niciun jurnal de erori — nu ai avut probleme.' : 'No error log yet — no issues so far.';
 }

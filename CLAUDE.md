@@ -591,6 +591,23 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
       a fost eliminat din `_providerCutMarker` — pe această poliță „SUCURSALA BUCUREȘTI” e parte
       din numele legal propriu-zis al asigurătorului („...ATENA - SUCURSALA BUCUREȘTI”), nu
       eticheta unui câmp următor; păstrarea lui trunchia numele la jumătate.
+15. Secțiune „Feedback” + „Trimite jurnal erori” în Setări, pregătite pentru testare externă
+    (prieteni/Play Store closed testing) — vezi `PRIVACY_POLICY.md` pentru textul complet trimis
+    utilizatorilor. Feedback-ul deschide un `mailto:` (`url_launcher`) către adresa
+    dezvoltatorului, cu subiect predefinit — nu există niciun formular/backend propriu.
+    Monitorizarea erorilor a fost cerută inițial ca Firebase Crashlytics, dar **respinsă explicit
+    de utilizator** fiindcă încalcă principiul „fără backend/cloud” de mai sus (Crashlytics
+    trimite stack trace-uri și date de device către serverele Google) — soluția aleasă e
+    `lib/services/error_log_service.dart`: un jurnal text 100% local (ultimele 100 intrări,
+    rotativ), populat din `FlutterError.onError` + `PlatformDispatcher.instance.onError` +
+    `runZonedGuarded` în `main.dart`. Nu se trimite NICIODATĂ automat — doar dacă utilizatorul
+    apasă explicit „Trimite jurnal erori”, caz în care fișierul e oferit prin share sheet-ul
+    nativ (`share_plus`), la fel ca orice alt fișier din aplicație (nu prin `url_launcher`/mailto,
+    ca la feedback, fiindcă un jurnal poate depăși lungimea practică a unui body de `mailto:`).
+    **Dacă se cere vreodată integrarea unui serviciu extern de crash reporting pe viitor, tratează
+    asta ca pe o schimbare de arhitectură care necesită reconfirmare explicită**, nu doar o
+    adăugare de dependință — decizia „fără cloud” a fost reafirmată conștient aici, nu omisă din
+    neatenție.
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

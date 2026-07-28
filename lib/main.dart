@@ -1,15 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'screens/main_shell.dart';
+import 'services/error_log_service.dart';
 import 'services/notification_service.dart';
 import 'services/region_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await RegionService.instance.load();
-  await NotificationService.instance.init();
-  runApp(const CarPlannerApp());
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    ErrorLogService.instance.init();
+    await RegionService.instance.load();
+    await NotificationService.instance.init();
+    runApp(const CarPlannerApp());
+  }, (error, stack) {
+    ErrorLogService.instance.logZoneError(error, stack);
+  });
 }
 
 class CarPlannerApp extends StatelessWidget {

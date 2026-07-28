@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/strings.dart';
+import '../services/error_log_service.dart';
 import '../services/region_service.dart';
+
+const _feedbackEmail = 'dodeacristian@gmail.com';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,6 +17,29 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _region = RegionService.instance;
+
+  Future<void> _sendFeedback(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _feedbackEmail,
+      query: 'subject=${Uri.encodeComponent(S.feedbackEmailSubject)}',
+    );
+    final launched = await launchUrl(uri);
+    if (!context.mounted || launched) return;
+    messenger.showSnackBar(SnackBar(content: Text(S.feedbackLaunchFailed)));
+  }
+
+  Future<void> _sendErrorLog(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await ErrorLogService.instance.hasEntries()) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(S.noErrorLogEntries)));
+      return;
+    }
+    final file = await ErrorLogService.instance.exportFile();
+    await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +82,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _SectionHeader(S.contactSectionHeader),
               Text(
                 S.contactComingSoon,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 32),
+              _SectionHeader(S.feedbackSectionHeader),
+              Text(
+                S.feedbackDescription,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => _sendFeedback(context),
+                icon: const Icon(Icons.email_outlined),
+                label: Text(S.sendFeedbackButton),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                S.errorLogDescription,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _sendErrorLog(context),
+                icon: const Icon(Icons.bug_report_outlined),
+                label: Text(S.sendErrorLogButton),
+              ),
+              const SizedBox(height: 32),
+              _SectionHeader(S.versionSectionHeader),
+              Text(
+                S.appVersionLabel,
                 style: Theme.of(context)
                     .textTheme
                     .bodyMedium

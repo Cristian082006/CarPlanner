@@ -1,4 +1,4 @@
-package com.dodea.car_planner
+package com.autocalendar
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -643,7 +643,7 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   FFI (`sqflite_common_ffi`) nu are un `databaseFactory` funcțional aici. Nu insista să-l repari;
   e o limitare de mediu, nu o regresie de cod.
 - **Inspectare directă a DB de pe device/emulator** (util când un bug pare să fie în date, nu în
-  cod): `adb -s <device> exec-out run-as com.dodea.car_planner cat databases/car_planner.db >
+  cod): `adb -s <device> exec-out run-as com.autocalendar cat databases/car_planner.db >
   local.db`, apoi interoghează cu `sqlite3` local (disponibil la `C:\platform-tools\sqlite3` pe
   mașina asta). Funcționează fiindcă build-ul debug e `run-as`-abil implicit. Șterge fișierul local
   după — poate conține date personale ale userului (plăcuțe, VIN etc. din mașinile lui reale, nu
@@ -651,6 +651,13 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
 
 ## Pregătire build Google Play Store
 
+- **Application ID**: `com.autocalendar` (namespace + applicationId în `android/app/build.gradle.kts`,
+  pachetul Kotlin la `android/app/src/main/kotlin/com/autocalendar/MainActivity.kt`) — schimbat de
+  la `com.dodea.car_planner` (id-ul original de dezvoltare) fiindcă fișa aplicației fusese deja
+  creată în Play Console cu `com.autocalendar` rezervat; consola respinge orice upload cu alt
+  package name. **Application ID-ul e imutabil odată ce primul upload reușește** — nu-l mai
+  schimba fără să confirmi explicit, ar însemna o aplicație nouă din perspectiva Play Store (pierzi
+  istoricul, recenziile, orice utilizatori existenți).
 - **Semnare release**: `android/upload-keystore.jks` (cheie de upload, RSA 2048, valabilă 10000
   zile/~27 ani) generat local cu `keytool`, alias `upload`. Parolele sunt în
   `android/key.properties` (NU în git — `.gitignore` deja exclude `key.properties`, `*.jks`,

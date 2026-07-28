@@ -5,8 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/strings.dart';
 import '../services/error_log_service.dart';
 import '../services/region_service.dart';
+import 'privacy_policy_screen.dart';
 
-const _feedbackEmail = 'dodeacristian@gmail.com';
+const _feedbackEmail = 'crdo0809@gmail.com';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -79,15 +80,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ?.copyWith(color: Colors.grey[600], fontStyle: FontStyle.italic),
               ),
               const SizedBox(height: 32),
-              _SectionHeader(S.contactSectionHeader),
-              Text(
-                S.contactComingSoon,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 32),
               _SectionHeader(S.feedbackSectionHeader),
               Text(
                 S.feedbackDescription,
@@ -121,6 +113,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     .textTheme
                     .bodyMedium
                     ?.copyWith(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                ),
+                icon: const Icon(Icons.privacy_tip_outlined),
+                label: Text(S.privacyPolicyButton),
               ),
             ],
           );

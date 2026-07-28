@@ -54,7 +54,7 @@ transmite nimic direct acestor site-uri.
 
 ### Contact
 
-Pentru întrebări despre confidențialitate: **dodeacristian@gmail.com**
+Pentru întrebări despre confidențialitate: **crdo0809@gmail.com**
 
 ---
 
@@ -109,4 +109,4 @@ not transmit anything directly to these sites.
 
 ### Contact
 
-For privacy questions: **dodeacristian@gmail.com**
+For privacy questions: **crdo0809@gmail.com**

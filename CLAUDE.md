@@ -591,10 +591,16 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
       a fost eliminat din `_providerCutMarker` — pe această poliță „SUCURSALA BUCUREȘTI” e parte
       din numele legal propriu-zis al asigurătorului („...ATENA - SUCURSALA BUCUREȘTI”), nu
       eticheta unui câmp următor; păstrarea lui trunchia numele la jumătate.
-15. Secțiune „Feedback” + „Trimite jurnal erori” în Setări, pregătite pentru testare externă
-    (prieteni/Play Store closed testing) — vezi `PRIVACY_POLICY.md` pentru textul complet trimis
-    utilizatorilor. Feedback-ul deschide un `mailto:` (`url_launcher`) către adresa
-    dezvoltatorului, cu subiect predefinit — nu există niciun formular/backend propriu.
+15. Secțiune „Feedback” + „Trimite jurnal erori” + „Politica de confidențialitate” în Setări,
+    pregătite pentru testare externă (prieteni/Play Store closed testing). Secțiunea „Contact”
+    (placeholder „în curând”) a fost eliminată — redundantă cu Feedback-ul funcțional. Textul
+    politicii e disponibil în două locuri sincronizate manual: `PRIVACY_POLICY.md` (pentru URL-ul
+    public cerut de Play Console) și `S.privacyPolicyBody` din `lib/l10n/strings.dart` (afișat
+    direct în aplicație, din `lib/screens/privacy_policy_screen.dart`, deschis din Setări) — dacă
+    actualizezi unul, actualizează-l și pe celălalt. Feedback-ul deschide un `mailto:`
+    (`url_launcher`) către `crdo0809@gmail.com` (adresa dezvoltatorului pentru testare externă —
+    diferită de adresa personală din restul proiectului), cu subiect predefinit — nu există niciun
+    formular/backend propriu.
     Monitorizarea erorilor a fost cerută inițial ca Firebase Crashlytics, dar **respinsă explicit
     de utilizator** fiindcă încalcă principiul „fără backend/cloud” de mai sus (Crashlytics
     trimite stack trace-uri și date de device către serverele Google) — soluția aleasă e

@@ -620,7 +620,14 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
 - Interogare **complet automată** RAR/AIDA/CNAIR (fără interacțiune din partea utilizatorului) —
   imposibilă fără un API plătit de la un broker care rezolvă el CAPTCHA pe partea lui; vezi nota
   despre `document_verification_utils.dart` de mai sus pentru ce există în schimb.
-- Cumpărare RCA/Rovinietă in-app via broker + Apple/Google Pay (premium).
+- Cumpărare RCA/Rovinietă in-app via broker + Apple/Google Pay (premium). **Atenție**: a existat o
+  încercare anterioară de a pregăti terenul adăugând doar permisiunea
+  `com.android.vending.BILLING` în `AndroidManifest.xml`, fără nicio integrare reală de billing —
+  Play Console a respins upload-ul cerând migrarea la Play Billing Library 6.0.1+ (permisiunea
+  singură e semnalul vechi de API AIDL de billing, pe care Google îl detectează static). Permisiunea
+  a fost eliminată. **Nu re-adăuga doar permisiunea „de rezervă”** la o viitoare cerere de
+  monetizare — implementează efectiv `in_app_purchase` (sau echivalent) în același pas, altfel
+  blochezi din nou orice upload către Play Store.
 - Denumiri specifice per-țară pentru alte țări în afară de România (în prezent doar un profil
   generic „Internațional”).
 - Selector de monedă, toggle km/mile, formatare dată localizată.

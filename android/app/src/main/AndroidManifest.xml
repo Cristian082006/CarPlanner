@@ -3,6 +3,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
+    <!-- Pregătire pentru achiziții in-app viitoare (roadmap: cumpărare RCA/Rovinietă via broker) —
+         permisiunea nu are efect fără un plugin de billing (ex. in_app_purchase) integrat în cod. -->
+    <uses-permission android:name="com.android.vending.BILLING"/>
     <application
         android:label="Auto Calendar"
         android:name="${applicationName}"

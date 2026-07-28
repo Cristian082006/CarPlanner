@@ -649,6 +649,34 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   după — poate conține date personale ale userului (plăcuțe, VIN etc. din mașinile lui reale, nu
   doar din cele de test).
 
+## Pregătire build Google Play Store
+
+- **Semnare release**: `android/upload-keystore.jks` (cheie de upload, RSA 2048, valabilă 10000
+  zile/~27 ani) generat local cu `keytool`, alias `upload`. Parolele sunt în
+  `android/key.properties` (NU în git — `.gitignore` deja exclude `key.properties`, `*.jks`,
+  `*.keystore`; există `android/key.properties.example` ca șablon fără parole reale, pentru
+  portare pe altă mașină). `android/app/build.gradle.kts` citește `key.properties` la build time
+  și cade automat pe semnarea cu cheia de debug dacă fișierul lipsește (ca `flutter run --release`
+  să meargă și fără keystore configurat, ex. pe o mașină nouă de dezvoltare).
+  **Acest keystore trebuie păstrat cu grijă și făcut backup manual (Drive/USB) — dacă se pierde,
+  nu se mai pot publica actualizări pentru aceeași aplicație pe Play Store sub aceeași identitate.**
+  Nu regenera keystore-ul „ca să repari o problemă" fără să confirmi explicit cu utilizatorul — e
+  ireversibil odată ce aplicația a fost publicată prima dată cu cheia curentă.
+- **Format upload**: Play Console cere `.aab` (App Bundle), nu `.apk` — `flutter build appbundle
+  --release`, output la `build/app/outputs/bundle/release/app-release.aab`. `isMinifyEnabled` +
+  `isShrinkResources` active pe `release` (R8/ProGuard, vezi `proguard-rules.pro` pentru regulile
+  specifice ML Kit).
+  Avertismentul „Release app bundle failed to strip debug symbols from native libraries" la build
+  e cunoscut și non-blocant pe acest toolchain Windows (lipsă `strip` din NDK în path) — bundle-ul
+  rezultat e valid pentru upload, doar puțin mai mare; nu e o eroare de semnare sau de build.
+- **Politica de confidențialitate** pentru formularul Play Console: `PRIVACY_POLICY.md` din root —
+  necesită un URL public (repo-ul trebuie să fie public, sau găzduit separat, ex. GitHub Pages);
+  vezi și ecranul in-app din `lib/screens/privacy_policy_screen.dart` (text sincronizat manual, nu
+  generat din același fișier — vezi punctul 15 din „Funcționalități implementate").
+- Versiune curentă: `1.0.0+1` (`pubspec.yaml`) — potrivită ca prim upload; incrementează
+  `versionCode`-ul (partea de după `+`) la fiecare build nou trimis pe orice track (inclusiv
+  closed testing), Play Console respinge un upload cu același `versionCode` ca unul existent.
+
 ## Convenții
 
 - Fără `flutter_localizations`/codegen ARB — orice string nou de UI merge în `lib/l10n/strings.dart`.

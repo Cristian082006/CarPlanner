@@ -30,7 +30,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'car_planner.db');
     return openDatabase(
       path,
-      version: 32,
+      version: 33,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -495,6 +495,20 @@ class DatabaseHelper {
       // cererea utilizatorului (ASY/BME/BNM/BTS/CFW/CAYC/CTHE/CHYA/CHYB) —
       // vezi comentariile din vehicle_reference_data.dart. Același
       // drop+reseed.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 33) {
+      // v33: Ford Focus (model_id=54) — corectat M1DA (era greșit ca "1.6
+      // Ti-VCT 105", e de fapt 1.0 EcoBoost 125) și adăugat M2DA (1.0
+      // EcoBoost 100) — vezi comentariile din vehicle_reference_data.dart.
+      // Același drop+reseed.
       await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
       await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
       await db.execute('DROP TABLE IF EXISTS intervale_generice');

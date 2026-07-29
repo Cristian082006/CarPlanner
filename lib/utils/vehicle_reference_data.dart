@@ -686,7 +686,13 @@ const List<String> referenceDataStatements = [
     (53, 'M2DA', 'EcoBoost 100', 998, 100, 3, 'Benzina', 'Curea', 2017, NULL),
     (54, 'SIDA', '1.6 Ti-VCT 100', 1596, 100, 4, 'Benzina', 'Curea', 2004, 2011),
     (54, 'G6DB', '1.8 TDCi 115', 1753, 115, 4, 'Diesel', 'Curea', 2004, 2011),
-    (54, 'M1DA', '1.6 Ti-VCT 105', 1596, 105, 4, 'Benzina', 'Curea', 2010, 2018),
+    -- M1DA corectat la v33 (cerere utilizator): era gresit ca "1.6 Ti-VCT
+    -- 105" in exportul original — 5+ surse independente de piese auto UK
+    -- (247spares x2, galamotors, 3ngines, 365engines, mymotorlist) confirma
+    -- unanim ca M1DA e de fapt 1.0 EcoBoost 125cp (998cc, 3 cilindri),
+    -- folosit pe Focus Mk3 2012-2018. Randul ramane pe aceeasi pozitie
+    -- (doar valorile s-au schimbat), deci nu afecteaza niciun id existent.
+    (54, 'M1DA', '1.0 EcoBoost 125', 998, 125, 3, 'Benzina', 'Curea', 2012, 2018),
     (54, 'T1DA', '1.6 TDCi 115', 1560, 115, 4, 'Diesel', 'Curea', 2010, 2018),
     (54, 'M8DB', 'EcoBoost 125', 998, 125, 3, 'Benzina', 'Curea', 2018, NULL),
     (54, 'MHBA', 'EcoBlue 120', 1499, 120, 4, 'Diesel', 'Curea', 2018, NULL),
@@ -1335,7 +1341,12 @@ const List<String> referenceDataStatements = [
     (219, 'CAYC', '1.6 TDI 90', 1598, 90, 4, 'Diesel', 'Curea', 2009, 2015),
     (219, 'CTHE', '1.4 TSI GTI 180', 1390, 180, 4, 'Benzina', 'Lant', 2010, 2014),
     (219, 'CHYA', '1.0 MPI 65', 999, 65, 3, 'Benzina', 'Lant', 2017, 2021),
-    (219, 'CHYB', '1.0 MPI 75', 999, 75, 3, 'Benzina', 'Lant', 2017, NULL)""",
+    (219, 'CHYB', '1.0 MPI 75', 999, 75, 3, 'Benzina', 'Lant', 2017, NULL),
+    -- Adaugate la v33 (cerere utilizator), la FINALUL tabelei — Ford Focus
+    -- (model_id=54) lipsea varianta de 100cp a 1.0 EcoBoost. M2DA e deja
+    -- folosit pe Fiesta (model_id=53) pentru acelasi motor fizic, 100cp,
+    -- cod confirmat de aceleasi surse ca M1DA de mai sus.
+    (54, 'M2DA', '1.0 EcoBoost 100', 998, 100, 3, 'Benzina', 'Curea', 2012, 2018)""",
   // completează cheia normalizată de căutare (majuscule, fără spații/
   // liniuțe/puncte) — aceeași normalizare ca `normalizeEngineCode`.
   """UPDATE motoare SET cod_motor_key =

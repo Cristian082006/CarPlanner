@@ -149,6 +149,23 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   fost adăugată printr-un `INSERT...SELECT` după `cod_motor` (nu id-uri hardcodate), tocmai ca să
   nu repete bug-ul de mai sus dacă motoarele s-ar reordona vreodată. Verificat cu teste
   (`test/polo_engines_test.dart`).
+  **v33 (motorizări Ford Focus lipsă, la cerere explicită, doar 2005+):** utilizatorul a întrebat
+  dacă Focus are toate motorizările — nu, lipseau 1.0 EcoBoost (100/125cp), 2.0 EcoBoost ST
+  (250cp), 2.3 EcoBoost RS (350cp), variante suplimentare de 2.0 TDCi și 1.5 TDCi. Cercetare web:
+  doar **M1DA** și **M2DA** (1.0 EcoBoost 125/100cp) au cod alfanumeric confirmat de minim 2 surse
+  independente (247spares ×2, galamotors, 3ngines, 365engines, mymotorlist) — restul (ST/RS/TDCi
+  suplimentar) au doar cifre de putere fără cod verificabil, la fel ca Ka+/Tourneo la v29, deci
+  **nu au fost adăugate**. **Bug real găsit în timpul cercetării**: codul **M1DA**, deja existent
+  în catalog pentru Focus ca „1.6 Ti-VCT 105", era **greșit** în exportul original — 5+ surse
+  independente confirmă unanim că M1DA e de fapt **1.0 EcoBoost 125cp** (998cc, 3 cilindri), nu
+  1.6 Ti-VCT. Corectat (rândul rămâne pe aceeași poziție, doar valorile s-au schimbat — nu
+  afectează niciun id existent) + adăugat **M2DA** (1.0 EcoBoost 100cp) la finalul tabelei
+  `motoare` (cod deja folosit pe Fiesta pentru același motor fizic, la o altă combinație
+  marcă+model — permis, `UNIQUE(model_id, cod_motor)` nu e global). Interval de ulei cercetat
+  pentru M1DA/M2DA dar **rămas ambiguu**: o sursă dă 15000 km/12 luni, alta dă 12500 mile/12 luni
+  (~20000 km) pentru modele pre-2019 vs. 18500 mile/24 luni pentru 2019+ — exact aceeași ambiguitate
+  deja documentată la v31 pentru toată gama Focus, deci **nicio regulă nouă aplicată**, rămân pe
+  fallback generic ca restul gamei. Verificat cu teste (`test/focus_engines_test.dart`).
   **Atenție la migrații reutilizate:**
   `_createComponentRecordsTable` construiește schema originală v2 (fără coloanele custom*) fiindcă
   e refolosită de calea de upgrade `oldVersion<2` — `_onCreate` aplică deltele ulterioare (ALTER)
@@ -161,11 +178,12 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   nameplate (un singur „Fiesta”, un singur „Golf”...), fără distincție de generație (cerut explicit
   de utilizator: căutarea pe marcă+model+an să întoarcă TOATE motorizările modelului, nu doar pe
   cele ale unei generații). 26 mărci / **245 modele** (235 din export + cele 10 modele Ford
-  adăugate manual la v29, vezi mai jos) / **790 motorizări** (756 din export + cele 7
+  adăugate manual la v29, vezi mai jos) / **791 motorizări** (756 din export + cele 7
   coduri reale Fiesta VI 1.6 TDCi de la v13 — HHJC/HHJD/HHJE/TZJA/TZJB/T1JA/UBJA — + cele 9
-  motorizări VW Polo de la v32 — ASY/BME/BNM/BTS/CFW/CAYC/CTHE/CHYA/CHYB — toate re-adăugate
-  manual la finalul secțiunilor `motoare`/`intervale_mentenanta` fiindcă **lipsesc din exportul
-  consolidat**; nu le șterge la o portare viitoare fără să verifici că noul export le conține) /
+  motorizări VW Polo de la v32 — ASY/BME/BNM/BTS/CFW/CAYC/CTHE/CHYA/CHYB — + M2DA (Ford Focus) de
+  la v33 — toate re-adăugate manual la finalul secțiunilor `motoare`/`intervale_mentenanta`
+  fiindcă **lipsesc din exportul consolidat**; nu le șterge la o portare viitoare fără să verifici
+  că noul export le conține) /
   1075+14 reguli specifice (doar distribuție, componentele 5/6 — restul componentelor vin din
   regulile generice per combustibil, prin view). Coloana `modele.generatie` rămâne în schemă
   (query-urile o referă) dar e NULL peste tot. Exportul v15 a fost verificat la portare pentru

@@ -488,7 +488,20 @@ const List<String> referenceDataStatements = [
     (15, 'V90', 'Combi', 2016, NULL),
     (15, 'XC40', 'SUV', 2017, NULL),
     (15, 'XC60', 'SUV', 2010, NULL),
-    (15, 'XC90', 'SUV', 2002, NULL)""",
+    (15, 'XC90', 'SUV', 2002, NULL),
+    -- Adăugate la v29 (cerere utilizator): restul modelelor Ford vândute
+    -- pe piața RO/UE, generație 2005+ (lista Ford era limitată anterior la
+    -- EcoSport/Fiesta/Focus/Kuga/Mondeo/Mustang Mach-E/Puma):
+    (9, 'Ka', 'Hatchback', 2008, 2016),
+    (9, 'Ka+', 'Hatchback', 2016, 2021),
+    (9, 'C-Max', 'Monovolum', 2003, 2019),
+    (9, 'B-Max', 'Monovolum', 2012, 2017),
+    (9, 'S-Max', 'Monovolum', 2006, NULL),
+    (9, 'Galaxy', 'Monovolum', 2006, NULL),
+    (9, 'Edge', 'SUV', 2016, 2018),
+    (9, 'Ranger', 'Pickup', 2006, NULL),
+    (9, 'Tourneo Custom', 'Van/Combi', 2013, NULL),
+    (9, 'Tourneo Connect', 'Van/Combi', 2013, 2023)""",
 
   // ---------- Date: motoare ----------
   """INSERT INTO motoare (model_id, cod_motor, denumire_comerciala, capacitate_cm3, putere_cp, cilindri, combustibil, tip_distributie, an_start, an_stop) VALUES
@@ -1256,7 +1269,45 @@ const List<String> referenceDataStatements = [
     (53, 'TZJA', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017),
     (53, 'TZJB', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017),
     (53, 'T1JA', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017),
-    (53, 'UBJA', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017)""",
+    (53, 'UBJA', '1.6 TDCi 95', 1560, 95, 4, 'Diesel', 'Curea', 2012, 2017),
+    -- Adăugate la v29 (cerere utilizator, caz concret: Focus 120cp
+    -- benzina+GPL nerecunoscut din talon — GPL e o conversie aftermarket,
+    -- codul de motor de pe talon rămâne cel original pe benzină, deci
+    -- caută normal ca 'Benzina'; lipsea complet varianta 125cp Sigma):
+    (54, 'IQDB', '1.6 Ti-VCT 125', 1596, 125, 4, 'Benzina', 'Curea', 2014, 2018),
+    -- Adăugate la v30: IQDB (125cp/92kW) tot nu era motorul real al
+    -- colegului utilizatorului — talonul lui arată explicit 88kW/120cp, o
+    -- variantă DIFERITĂ, mai veche (2011-2012), cod **MUDA/MUDD** — folosit
+    -- inițial doar pe trimul "Flexifuel" (etanol E85) Focus/C-Max, dar
+    -- montat pe același bloc Sigma 1.6 Ti-VCT ca varianta normală pe
+    -- benzină; GPL-ul aftermarket al colegului nu schimbă codul de fabrică
+    -- de pe talon. Surse: kateurope.com, auto-data.net, motorinsel.eu
+    -- (toate confirmă 1596cc/88kW/120cp pe codurile MUDA/MUDD).
+    (54, 'MUDA', '1.6 Ti-VCT 120', 1596, 120, 4, 'Benzina', 'Curea', 2011, 2012),
+    (54, 'MUDD', '1.6 Ti-VCT 120', 1596, 120, 4, 'Benzina', 'Curea', 2011, 2012),
+    (238, 'MUDA', '1.6 Ti-VCT 120', 1596, 120, 4, 'Benzina', 'Curea', 2011, 2012),
+    (238, 'MUDD', '1.6 Ti-VCT 120', 1596, 120, 4, 'Benzina', 'Curea', 2011, 2012),
+    -- Restul modelelor Ford noi (vezi tabela modele mai sus) — doar motoare
+    -- cu cod confirmat de cel puțin 2 surse independente (cercetare web);
+    -- Ka/Ka+/B-Max nu au primit nicio motorizare (surse cu un singur cod
+    -- neconfirmat/ambiguu pentru toate cele găsite) — rămân în catalog doar
+    -- ca model, fără potrivire pe cod de motor, la fel ca Tourneo
+    -- Custom/Connect (nicio sursă cu cod alfanumeric găsită deloc, doar
+    -- putere/capacitate) — vezi și lipsa de motorizare pentru Mustang
+    -- Mach-E (electric, alt motiv).
+    (238, 'HXDA', '1.6 Ti-VCT 100', 1596, 100, 4, 'Benzina', 'Curea', 2003, 2007),
+    (238, 'G8DA', '1.6 TDCi 90', 1560, 90, 4, 'Diesel', 'Curea', 2003, 2010),
+    (238, 'IQDB', '1.6 Ti-VCT 125', 1596, 125, 4, 'Benzina', 'Curea', 2010, 2019),
+    (240, 'QXWA', '2.0 TDCi 140', 1997, 140, 4, 'Diesel', 'Curea', 2006, 2014),
+    (240, 'UFWA', '2.0 TDCi 140', 1997, 140, 4, 'Diesel', 'Curea', 2010, 2015),
+    (241, 'QXWA', '2.0 TDCi 140', 1997, 140, 4, 'Diesel', 'Curea', 2006, 2015),
+    (241, 'UFWA', '2.0 TDCi 140', 1997, 140, 4, 'Diesel', 'Curea', 2010, 2015),
+    (242, 'T9CE', '2.0 TDCi Bi-Turbo 210', 1997, 210, 4, 'Diesel', 'Curea', 2016, 2018),
+    (243, 'WEAT', '3.0 TDCi 156', 2953, 156, 4, 'Diesel', 'Curea', 2006, 2011),
+    (243, 'WLAT', '2.5 TDCi 143', 2499, 143, 4, 'Diesel', 'Curea', 2006, 2011),
+    (243, 'P4AT', '2.2 TDCi 160', 2198, 160, 4, 'Diesel', 'Lant', 2011, 2022),
+    (243, 'P5AT', '3.2 TDCi 200', 3198, 200, 5, 'Diesel', 'Lant', 2011, 2022),
+    (243, 'YN2X', '2.0 EcoBlue Bi-Turbo 213', 1996, 213, 4, 'Diesel', 'Lant', 2019, 2022)""",
   // completează cheia normalizată de căutare (majuscule, fără spații/
   // liniuțe/puncte) — aceeași normalizare ca `normalizeEngineCode`.
   """UPDATE motoare SET cod_motor_key =
@@ -2802,7 +2853,33 @@ const List<String> referenceDataStatements = [
     -- insa o sursa curata: ~30000 km/12 luni (interval european citat
     -- explicit pentru Qashqai 1.6 dCi). Aplicat doar pe R9M (motor id 450,
     -- X-Trail — Qashqai R9M nu are inca o intrare proprie in catalog).
-    (450, 1, 30000, 12, 'Interval Nissan R9M (sursa EU Qashqai 1.6 dCi, incredere moderata)')""",
+    (450, 1, 30000, 12, 'Interval Nissan R9M (sursa EU Qashqai 1.6 dCi, incredere moderata)'),
+    -- v31 — verificare intervale de ulei pentru Ford, la cererea
+    -- utilizatorului (dupa ce s-au adaugat multe motorizari noi la v29/v30).
+    -- Concluzie: gama Ford Fiesta/Focus/C-Max/Kuga/Mondeo/S-Max/Galaxy
+    -- ramane AMBIGUA, la fel ca VW/BMW/Mercedes inainte de re-verificarile
+    -- lor dedicate (v25-27) — surse Haynes pentru modele specifice dau
+    -- consistent 12500 mile/12 luni (~20000 km) pentru Fiesta Mk7 si Focus
+    -- Mk3 (petrol SI diesel deopotriva), dar alte surse (Kuga Euro6.2,
+    -- afirmatii generale Ford UK) dau 18000 mile/24 luni pentru modele mai
+    -- noi — posibil o extindere reala de-a lungul timpului (ca la BMW/VW),
+    -- dar nu am gasit o sursa care sa confirme explicit pragul de an la
+    -- care s-a schimbat, deci NU s-a aplicat nicio regula pe gama asta —
+    -- ramane pe fallback-ul generic (Benzina 15000/12, Diesel 12000/12,
+    -- ambele deja in directia conservatoare/sigura fata de orice cifra
+    -- gasita). Poate fi reverificat separat cu surse UK specifice, dupa
+    -- modelul folosit la BMW/VW/Mercedes, daca se cere explicit.
+    -- Ford Ranger (toate cele 5 motoare diesel din catalog: WEAT/WLAT/P4AT/
+    -- P5AT/YN2X, motor id 777-781) e diferit: sursa dedicata (AUTODOC,
+    -- pagina de produs pentru Ranger 3.2 TDCi) + confirmare forum UK arata
+    -- consistent 15000 km/12 luni — vizibil mai scurt decat gama de
+    -- pasageri, plauzibil (uz comercial/off-road mai solicitant), aplicat
+    -- pe toate cele 5 motoare fiindca sursa nu diferentiaza intre ele.
+    (777, 1, 15000, 12, 'Interval oficial Ford Ranger diesel (sursa AUTODOC + forum UK, incredere moderata)'),
+    (778, 1, 15000, 12, 'Interval oficial Ford Ranger diesel (sursa AUTODOC + forum UK, incredere moderata)'),
+    (779, 1, 15000, 12, 'Interval oficial Ford Ranger diesel (sursa AUTODOC + forum UK, incredere moderata)'),
+    (780, 1, 15000, 12, 'Interval oficial Ford Ranger diesel (sursa AUTODOC + forum UK, incredere moderata)'),
+    (781, 1, 15000, 12, 'Interval oficial Ford Ranger diesel (sursa AUTODOC + forum UK, incredere moderata)')""",
 ];
 
 /// Normalizează un cod de motor (majuscule, fără spații/liniuțe/puncte) —

@@ -7,6 +7,7 @@ import '../models/car_document.dart';
 import '../models/vehicle.dart';
 import '../services/document_scanner_service.dart';
 import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/constants.dart';
 import '../utils/date_utils.dart';
 import '../utils/document_verification_utils.dart';
@@ -43,6 +44,18 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
   bool get _isEditing => widget.document != null;
   bool get _isForVehicle => widget.vehicleId != null;
   bool get _isPolicyType => _type == DocumentType.rca || _type == DocumentType.casco;
+
+  /// Extragerea automată de date din PDF (`DocumentScannerService.
+  /// scanRcaPdf`/`parseRcaText`) a fost reglată și testată DOAR pe polițe
+  /// RCA reale (vezi comentariul din CLAUDE.md, punctul 14) — formatul
+  /// standardizat A.S.F. ("Seria RO/32/..." etc.) e specific RCA-ului, care
+  /// e singurul tip de asigurare auto reglementat identic la toți
+  /// asigurătorii; CASCO variază mult mai mult de la un asigurător la altul
+  /// și nu a fost testat pe niciun document real. Deci butonul PDF se
+  /// comportă ca "scanare" (etichetă + stil roșu) DOAR pentru RCA — pentru
+  /// CASCO rămâne un simplu atașament PDF, ca la ITP/Rovinietă, până se
+  /// verifică/reglează parsarea pe o poliță CASCO reală.
+  bool get _pdfScansData => _type == DocumentType.rca;
 
   List<DocumentType> get _availableTypes => _isForVehicle
       ? [DocumentType.rca, DocumentType.casco, DocumentType.rovinieta, DocumentType.itp, DocumentType.other]
@@ -238,7 +251,20 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
               controller: _titleCtrl,
               decoration: InputDecoration(labelText: S.customNameOptional),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            PhotoPickerField(
+              initialPath: _photoPath,
+              label: _isPolicyType ? S.documentPhotoOrPdf : S.documentPhoto,
+              allowPdf: true,
+              pdfScansData: _pdfScansData,
+              onChanged: (path) {
+                _photoPath = path;
+                if (path != null && path.toLowerCase().endsWith('.pdf') && _pdfScansData) {
+                  _tryAutoFillFromPdf(path);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -276,20 +302,23 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
               trailing: const Icon(Icons.calendar_today_outlined),
               onTap: () => _pickDate(isStart: false),
             ),
-            if (hasOfficialVerification(_type))
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => verifyDocumentOnOfficialSite(
-                    context,
-                    type: _type,
-                    plateNumber: _vehicle?.plateNumber,
-                    vin: _vehicle?.vin,
-                  ),
-                  icon: const Icon(Icons.travel_explore_outlined, size: 18),
-                  label: Text(S.verifyOnOfficialSite),
+            if (hasOfficialVerification(_type)) ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: kAttentionColor,
+                  foregroundColor: Colors.white,
                 ),
+                onPressed: () => verifyDocumentOnOfficialSite(
+                  context,
+                  type: _type,
+                  plateNumber: _vehicle?.plateNumber,
+                  vin: _vehicle?.vin,
+                ),
+                icon: const Icon(Icons.travel_explore_outlined, size: 18),
+                label: Text(S.verifyOnOfficialSite),
               ),
+            ],
             const SizedBox(height: 12),
             TextFormField(
               controller: _costCtrl,
@@ -301,18 +330,6 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
               controller: _notesCtrl,
               decoration: InputDecoration(labelText: S.notes, alignLabelWithHint: true),
               maxLines: 3,
-            ),
-            const SizedBox(height: 12),
-            PhotoPickerField(
-              initialPath: _photoPath,
-              label: _isPolicyType ? S.documentPhotoOrPdf : S.documentPhoto,
-              allowPdf: true,
-              onChanged: (path) {
-                _photoPath = path;
-                if (path != null && path.toLowerCase().endsWith('.pdf') && _isPolicyType) {
-                  _tryAutoFillFromPdf(path);
-                }
-              },
             ),
             const SizedBox(height: 24),
             FilledButton(

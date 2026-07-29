@@ -7,6 +7,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../l10n/strings.dart';
+import '../theme/app_theme.dart';
 
 /// Câmp reutilizabil pentru atașarea unei poze (poză carte service, scan
 /// document etc) sau, opțional ([allowPdf]), a unui fișier PDF. Copiază
@@ -19,12 +20,23 @@ class PhotoPickerField extends StatefulWidget {
   final ValueChanged<String?> onChanged;
   final bool allowPdf;
 
+  /// Dacă apelantul chiar rulează OCR pe PDF-ul ales (vezi
+  /// `DocumentScannerService.scanRcaPdf`, apelat doar pentru RCA/CASCO din
+  /// `add_edit_document_screen.dart`) — controlează dacă butonul PDF se
+  /// prezintă ca "Scanează date din PDF" (roșu, sare în ochi) sau ca simplu
+  /// "Atașează PDF" (stil normal). Fără asta, butonul ar promite scanare și
+  /// pentru tipuri de document (ITP, Rovinietă etc.) unde nu se întâmplă
+  /// nimic în afară de atașarea fișierului — un PDF poate fi oricum atașat
+  /// la orice tip de document, doar eticheta/stilul diferă după caz.
+  final bool pdfScansData;
+
   const PhotoPickerField({
     super.key,
     required this.initialPath,
     required this.onChanged,
     this.label,
     this.allowPdf = false,
+    this.pdfScansData = false,
   });
 
   @override
@@ -138,11 +150,21 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
                 label: Text(S.gallery),
               ),
               if (widget.allowPdf)
-                OutlinedButton.icon(
-                  onPressed: _pickPdf,
-                  icon: const Icon(Icons.picture_as_pdf_outlined),
-                  label: Text(S.attachPdf),
-                ),
+                widget.pdfScansData
+                    ? FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: kAttentionColor,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _pickPdf,
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                        label: Text(S.scanDataFromPdf),
+                      )
+                    : OutlinedButton.icon(
+                        onPressed: _pickPdf,
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                        label: Text(S.attachPdf),
+                      ),
             ],
           ),
       ],

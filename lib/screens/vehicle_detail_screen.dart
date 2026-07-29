@@ -7,6 +7,7 @@ import '../models/component_record.dart';
 import '../models/service_record.dart';
 import '../models/vehicle.dart';
 import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/date_utils.dart';
 import '../utils/engine_lookup.dart';
 import '../utils/maintenance_profiles.dart';
@@ -38,6 +39,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   List<ComponentRecord> _componentRecords = [];
   Set<String> _extraComponentIds = {};
   bool _loading = true;
+  int _currentTabIndex = 0;
 
   @override
   void initState() {
@@ -72,43 +74,64 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
       return Scaffold(body: Center(child: Text(S.carNotFound)));
     }
 
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(vehicle.name),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => AddEditVehicleScreen(vehicle: vehicle)),
-                );
-                _load();
-              },
-            ),
-          ],
-          bottom: TabBar(isScrollable: true, tabs: [
-            Tab(text: S.tabInfo),
-            Tab(text: S.tabService),
-            Tab(text: S.tabDocuments),
-            Tab(text: S.tabComponents),
-          ]),
-        ),
-        body: TabBarView(
-          children: [
-            _InfoTab(vehicle: vehicle, onChanged: _load),
-            _RecordsTab(vehicle: vehicle, records: _records, onChanged: _load),
-            _DocumentsTab(vehicle: vehicle, documents: _documents, onChanged: _load),
-            _ComponentsTab(
-              vehicle: vehicle,
-              componentRecords: _componentRecords,
-              extraComponentIds: _extraComponentIds,
-              onChanged: _load,
-            ),
-          ],
-        ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(vehicle.name),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AddEditVehicleScreen(vehicle: vehicle)),
+              );
+              _load();
+            },
+          ),
+        ],
+      ),
+      body: IndexedStack(
+        index: _currentTabIndex,
+        children: [
+          _InfoTab(vehicle: vehicle, onChanged: _load),
+          _RecordsTab(vehicle: vehicle, records: _records, onChanged: _load),
+          _DocumentsTab(vehicle: vehicle, documents: _documents, onChanged: _load),
+          _ComponentsTab(
+            vehicle: vehicle,
+            componentRecords: _componentRecords,
+            extraComponentIds: _extraComponentIds,
+            onChanged: _load,
+          ),
+        ],
+      ),
+      // Aceeași componentă NavigationBar (Material 3, pill de selecție) ca pe
+      // ecranul Acasă (`main_shell.dart`) — cerut explicit de utilizator, ca
+      // taburile mașinii să arate la fel ca navigarea principală.
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentTabIndex,
+        onDestinationSelected: (i) => setState(() => _currentTabIndex = i),
+        destinations: [
+          NavigationDestination(
+            icon: const Icon(Icons.info_outline),
+            selectedIcon: const Icon(Icons.info),
+            label: S.tabInfo,
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.build_outlined),
+            selectedIcon: const Icon(Icons.build),
+            label: S.tabService,
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.description_outlined),
+            selectedIcon: const Icon(Icons.description),
+            label: S.tabDocuments,
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.checklist_outlined),
+            selectedIcon: const Icon(Icons.checklist),
+            label: S.tabComponents,
+          ),
+        ],
       ),
     );
   }
@@ -351,7 +374,11 @@ class _InfoTab extends StatelessWidget {
               ),
             )),
         const SizedBox(height: 16),
-        OutlinedButton.icon(
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: kAttentionColor,
+            foregroundColor: Colors.white,
+          ),
           onPressed: () => _applyMaintenanceProfile(context),
           icon: const Icon(Icons.checklist_rtl_outlined),
           label: Text(S.suggestMaintenanceProfile('${vehicle.make} ${vehicle.model}'.trim())),

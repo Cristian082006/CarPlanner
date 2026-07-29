@@ -30,7 +30,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'car_planner.db');
     return openDatabase(
       path,
-      version: 28,
+      version: 31,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -434,6 +434,53 @@ class DatabaseHelper {
       // dCi, mai nou) a primit fix: 30000 km/12 luni. Vezi comentariile din
       // vehicle_reference_data.dart. Același drop+reseed ca la
       // actualizările anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 29) {
+      // v29: adăugate restul modelelor Ford vândute pe piața RO/UE
+      // (2005+) — Ka/Ka+/C-Max/B-Max/S-Max/Galaxy/Edge/Ranger/Tourneo
+      // Custom/Connect — plus motorul 1.6 Ti-VCT 125 (IQDB) care lipsea la
+      // Focus, la cererea utilizatorului (caz concret: Focus 120cp
+      // benzina+GPL nerecunoscut din talon). Vezi comentariile din
+      // vehicle_reference_data.dart. Același drop+reseed ca la
+      // actualizările anterioare.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 30) {
+      // v30: IQDB (125cp/92kW, adăugat la v29) tot nu era motorul real din
+      // cazul concret care a pornit toate astea — utilizatorul a confirmat
+      // că talonul colegului arată explicit 88kW/120cp, o variantă diferită
+      // (2011-2012), cod MUDA/MUDD. Adăugat pe Focus și C-Max. Vezi
+      // comentariile din vehicle_reference_data.dart. Același drop+reseed.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 31) {
+      // v31: verificare intervale de ulei pentru Ford, la cererea
+      // utilizatorului — doar Ranger a primit o regulă nouă (15000 km/12
+      // luni, sursă clară); restul gamei Ford rămâne ambiguă, ca VW/BMW/
+      // Mercedes înainte de re-verificările lor dedicate. Vezi comentariile
+      // din vehicle_reference_data.dart. Același drop+reseed.
       await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
       await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
       await db.execute('DROP TABLE IF EXISTS intervale_generice');

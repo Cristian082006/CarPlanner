@@ -7,6 +7,7 @@ import '../l10n/strings.dart';
 import '../models/vehicle.dart';
 import '../services/document_scanner_service.dart';
 import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/engine_lookup.dart';
 import '../utils/vin_decoder.dart';
 import '../widgets/engine_candidates_dialog.dart';
@@ -37,6 +38,15 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
   String? _photoPath;
   bool _saving = false;
   bool _scanning = false;
+
+  /// Puterea (CP) citită de pe talon la ultima scanare (câmpul P.2) — dacă
+  /// e disponibilă, restrânge lista de motoare candidate arătată de
+  /// [_decodeVinEngine] la variantele cu aceeași putere, ca să nu mai
+  /// trebuiască utilizatorul să aleagă orbește între motoare cu coduri
+  /// diferite dar aceeași capacitate (ex. IQDB 125cp vs. MUDA 120cp pe
+  /// Focus). `null` dacă nu s-a scanat încă talonul sau OCR-ul nu a găsit
+  /// P.2 — în acel caz lista rămâne nefiltrată, ca înainte.
+  int? _scannedPowerCp;
 
   bool get _isEditing => widget.vehicle != null;
 
@@ -104,6 +114,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       if (data.vin != null) _vinCtrl.text = data.vin!;
       if (data.plateNumber != null) _plateCtrl.text = data.plateNumber!;
       if (data.engineCode != null) _engineCodeCtrl.text = data.engineCode!;
+      if (data.year != null) _yearCtrl.text = data.year!.toString();
+      _scannedPowerCp = data.powerCp;
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -148,7 +160,35 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       return;
     }
 
-    final chosen = await showEngineCandidatesDialog(context, result);
+    // Dacă talonul a fost scanat și P.2 a fost recunoscut, restrângem
+    // lista la motoarele cu exact acea putere — de obicei disambiguează
+    // complet (ex. IQDB 125cp vs. MUDA 120cp pe același model/an). Dacă
+    // nimic nu se potrivește (OCR greșit, sau catalogul nu are exact acel
+    // motor), arătăm în continuare toate candidatele, ca să nu blocăm
+    // utilizatorul — vezi [_scannedPowerCp].
+    var filteredResult = result;
+    final targetPower = _scannedPowerCp;
+    if (targetPower != null) {
+      final matched =
+          result.candidates.where((c) => c['putere_cp'] == targetPower).toList();
+      if (matched.isNotEmpty) {
+        filteredResult = EngineCandidatesResult(
+          candidates: matched,
+          tier: result.tier,
+          modelYear: result.modelYear,
+          detectedMake: result.detectedMake,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(S.vinPowerFilterHint(targetPower))),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(S.vinPowerNoMatch(targetPower))),
+        );
+      }
+    }
+
+    final chosen = await showEngineCandidatesDialog(context, filteredResult);
     if (chosen == null) return;
     setState(() {
       _engineCodeCtrl.text = chosen['cod_motor'] as String;
@@ -241,13 +281,17 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            OutlinedButton.icon(
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: kAttentionColor,
+                foregroundColor: Colors.white,
+              ),
               onPressed: _scanning ? null : _scanTalon,
               icon: _scanning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.document_scanner_outlined),
               label: Text(_scanning ? S.readingRegistration : S.scanRegistration),

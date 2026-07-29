@@ -25,7 +25,7 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   `android.builtInKotlin` — verifică întâi dacă TOATE pluginurile folosite sunt migrate la același
   stil, altfel rămâi pe un AGP <9.
 - SQLite via `sqflite`, singleton în `lib/db/database_helper.dart`, cu migrații `onUpgrade`
-  (versiune curentă: 28 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
+  (versiune curentă: 31 — v2 a adăugat tabela `component_records`, v3 a adăugat coloana
   `changedComponentIds` pe `service_records`, v4 a adăugat `customIntervalKm/Months/Source` pe
   `component_records` + tabela `vehicle_extra_components`, v5 a adăugat coloana `engineCode` pe
   `vehicles`, v6 a adăugat un prim set de tabele de catalog `vehicle_models`/`maintenance_intervals`
@@ -60,7 +60,63 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   a rămas fără regulă (conflict real chiar și în surse UK), celelalte 3 au primit fix, iar v28 a
   găsit motivul real al conflictului M9R (schimbare de schemă la o actualizare de model, sfârșit
   2010) și a aplicat fix pe R9M (motorul mai nou care l-a înlocuit) — schema tabelelor rămânând
-  neschimbată pe tot parcursul, mai puțin faptul că `modele.generatie` e NULL peste tot din v15).
+  neschimbată pe tot parcursul, mai puțin faptul că `modele.generatie` e NULL peste tot din v15,
+  iar v29 a extins lista de modele Ford (la cererea utilizatorului, pornind de la un caz concret:
+  un Focus 120cp benzină+GPL nerecunoscut din talon) — GPL e tratat ca Benzina (conversie
+  aftermarket, codul de motor de pe talon rămâne cel original pe benzină; catalogul nu are și nu a
+  primit o categorie separată de combustibil GPL/bi-fuel). Cauza reală a cazului concret: lipsea
+  varianta 1.6 Ti-VCT 125cp „Sigma" (cod **IQDB**) la Focus — adăugată. În plus, la cererea
+  explicită „adaugă toate modelele de Ford" (limitat de utilizator la modele 2005+ vândute pe
+  piața RO/UE, nu tot istoricul Ford), au fost adăugate 10 modele noi: **Ka** (2008-2016),
+  **Ka+** (2016-2021), **C-Max** (2003-2019, o singură nameplate consolidată ca la celelalte
+  modele post-v15, deși acoperă 2 generații), **B-Max** (2012-2017), **S-Max** (2006-prezent),
+  **Galaxy** (2006-prezent), **Edge** (2016-2018), **Ranger** (2006-prezent), **Tourneo Custom**
+  (2013-prezent), **Tourneo Connect** (2013-2023) — toate adăugate la finalul tabelei `modele`
+  (id 236-245), NU inserate în mijloc, ca să nu deraieze id-urile hardcodate din `motoare`/
+  `intervale_mentenanta` ale celorlalte mărci de după Ford în listă (Honda etc.). Motorizări
+  adăugate DOAR pentru modelele cu cel puțin un cod confirmat de 2 surse independente în cercetarea
+  web făcută pentru acest lot: C-Max (HXDA 1.6 Ti-VCT 100, G8DA 1.6 TDCi 90, IQDB 1.6 Ti-VCT 125),
+  S-Max și Galaxy (QXWA/UFWA 2.0 TDCi 140, cod comun — aceeași platformă WA6), Edge (T9CE 2.0 TDCi
+  Bi-Turbo 210), Ranger (WEAT 3.0 TDCi 156 și WLAT 2.5 TDCi 143 pentru generația 2006-2011, P4AT
+  2.2 TDCi 160/P5AT 3.2 TDCi 200/YN2X 2.0 EcoBlue Bi-Turbo 213 pentru generația 2012-2022, distins
+  prin lanț vs. curea de distribuție). **Ka, Ka+, B-Max, Tourneo Custom și Tourneo Connect NU au
+  primit nicio motorizare** — singurele coduri găsite pentru ele proveneau dintr-o singură sursă
+  neconfirmată sau erau doar cifre de putere fără cod alfanumeric verificabil (mai ales la Tourneo,
+  nicio sursă cu cod real găsită deloc) — există doar ca model în catalog, fără potrivire pe cod de
+  motor (la fel ca Mustang Mach-E, deja fără motoare fiindcă e electric). Verificat cu test scratch
+  (șters după confirmare) că IQDB se rezolvă distinct pe Focus vs. C-Max prin `make`/`model`
+  (mecanismul existent din `getEngineForCode`, nu unul nou), că G8DB rămâne neschimbat pe Fiesta
+  (90cp) în ciuda noului G8DA de pe C-Max (cod diferit, nu coliziune), și că toate cele 5 modele
+  fără motorizare întorc listă goală prin `getCandidateEnginesForVin`.
+  **v30 (fix real al cazului concret, la scurt timp după v29):** IQDB (125cp/92kW) nu era de fapt
+  motorul colegului utilizatorului — talonul lui arată explicit **88kW/120cp**, o variantă diferită
+  de 1.6 Ti-VCT, mai veche (2011-2012), cu codul **MUDA/MUDD** (confirmat pe kateurope.com,
+  auto-data.net, motorinsel.eu — toate dau 1596cc/88kW/120cp pentru acest cod exact). Observație
+  importantă: sursele arată MUDA/MUDD ca fiind folosit inițial (poate exclusiv) pe trimul
+  "Flexifuel" (motor pregătit pentru etanol E85, NU GPL) al Focus/C-Max — dar e același bloc fizic
+  Sigma 1.6 Ti-VCT ca varianta normală pe benzină, deci codul de pe talon rămâne valabil indiferent
+  de conversia GPL aftermarket a colegului (GPL ≠ E85, dar hardware-ul motorului e identic). IQDB nu
+  a fost eliminat — rămâne un motor real pentru alți Focus/C-Max (2014-2018, 125cp) — MUDA/MUDD s-a
+  adăugat suplimentar, pe Focus (id 54) ȘI C-Max (id 238, același motor a fost disponibil și acolo
+  ca Flexifuel). Nicio schimbare de schemă, doar date noi — DROP+reseed ca la toate migrațiile
+  anterioare de catalog.
+  **v31 (verificare intervale ulei Ford, la cerere explicită):** după ce s-au adăugat multe
+  motorizări Ford noi la v29/v30, utilizatorul a cerut verificarea intervalelor de schimb pentru
+  toată gama. Rezultat: **Fiesta/Focus/C-Max/Kuga/Mondeo/S-Max/Galaxy rămân AMBIGUE** — surse Haynes
+  pentru modele specifice (Fiesta Mk7, Focus Mk3) dau consistent 12500 mile/12 luni (~20000 km,
+  petrol ȘI diesel deopotrivă), dar alte surse (Kuga Euro6.2, afirmații generale Ford UK) dau 18000
+  mile/24 luni pentru modele mai noi — posibil o extindere reală de-a lungul timpului (ca la BMW/VW
+  în v25/v26), dar fără o sursă care să confirme explicit pragul de an — **nicio regulă aplicată**,
+  la fel ca VW/BMW/Mercedes înainte de re-verificările lor dedicate; poate fi reluat separat cu
+  surse UK specifice dacă se cere. **Ford Ranger** (WEAT/WLAT/P4AT/P5AT/YN2X, toate cele 5 motoare
+  diesel din catalog, motor id 777-781) e diferit — sursă dedicată AUTODOC + confirmare forum UK dau
+  consistent **15000 km/12 luni**, vizibil mai scurt decât gama de pasageri (plauzibil, uz
+  comercial/off-road mai solicitant) — regulă aplicată pe toate cele 5 (sursa nu diferențiază între
+  ele). Aceeași sesiune a mai adăugat filtrarea listei de motoare candidate din dialogul de decodare
+  VIN după puterea (CP) citită de pe talon la câmpul P.2 (`lib/screens/add_edit_vehicle_screen.dart`,
+  `_scannedPowerCp` — populat din `document_scanner_service.dart`, care extrage P.2 ca pereche
+  "kW (CP)" dacă valoarea din paranteză e plauzibilă ca putere, altfel convertește kW→CP; extrage și
+  anul din câmpul B, la fel — ambele confirmate de utilizator că funcționează pe talonul lui real).
   **Atenție la migrații reutilizate:**
   `_createComponentRecordsTable` construiește schema originală v2 (fără coloanele custom*) fiindcă
   e refolosită de calea de upgrade `oldVersion<2` — `_onCreate` aplică deltele ulterioare (ALTER)
@@ -72,7 +128,8 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   din v15 cu structură **consolidată** din `auto_mentenanta_5.sql` — un singur rând în `modele` per
   nameplate (un singur „Fiesta”, un singur „Golf”...), fără distincție de generație (cerut explicit
   de utilizator: căutarea pe marcă+model+an să întoarcă TOATE motorizările modelului, nu doar pe
-  cele ale unei generații). 26 mărci / 235 modele / **763 motorizări** (756 din export + cele 7
+  cele ale unei generații). 26 mărci / **245 modele** (235 din export + cele 10 modele Ford
+  adăugate manual la v29, vezi mai jos) / **781 motorizări** (756 din export + cele 7
   coduri reale Fiesta VI 1.6 TDCi de la v13 — HHJC/HHJD/HHJE/TZJA/TZJB/T1JA/UBJA — re-adăugate
   manual la finalul secțiunilor `motoare`/`intervale_mentenanta` fiindcă **lipsesc din exportul
   consolidat**; nu le șterge la o portare viitoare fără să verifici că noul export le conține) /
@@ -386,7 +443,32 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   "cod motor" — **spre deosebire de D.3, talonul românesc NU are un câmp standardizat UE dedicat
   codului de motor**, deci extracția e best-effort (rată de succes probabil scăzută/inconsistentă
   în funcție de formatul talonului fotografiat); utilizatorul completează manual când OCR-ul nu
-  găsește nimic, la fel ca la orice alt câmp.
+  găsește nimic, la fel ca la orice alt câmp. Extrage și anul (câmpul B, data primei
+  înmatriculări — cel mai apropiat proxy pentru anul de fabricație, talonul RO nu are un câmp
+  dedicat separat) și puterea (câmpul P.2, **mereu în kW** — convertită în CP prin `kw * 1,35962`
+  și rotunjită; folosită la filtrarea listei de motoare candidate din dialogul de decodare VIN,
+  vezi `_scannedPowerCp`/`pdfScansData` în `add_edit_vehicle_screen.dart`).
+  **Bug real găsit pe o poză reală de talon (Hyundai Tucson, trimisă de utilizator) — reconstrucție
+  geometrică a rândurilor, nu doar text brut:** talonul RO e un layout pe două coloane (etichetă
+  îngustă în stânga: A/J/D.1/D.2/D.3/E/K..., valoare mai lată în dreapta: IS-49-KRP/AUTOTURISM M1/
+  HYUNDAI/TLE F5D14/TUCSON/VIN...). ML Kit grupează des cele două coloane în blocuri de text
+  SEPARATE, deci `RecognizedText.text` (stringul brut, concatenat block cu block) înșiruia toate
+  etichetele, apoi toate valorile — nu alternativ, rând cu rând. Orice extracție ancorată pe
+  "eticheta e pe aceeași linie sau pe linia următoare" (D.3 pentru model, B pentru an, P.2 pentru
+  putere) nimerea complet greșit: D.3 ajungea urmat de "E" (eticheta VIN-ului, tot din blocul de
+  etichete) în loc de valoarea reală "TUCSON". Fix: `reconstructRowsByPosition` (funcție top-level,
+  testabilă separat de OCR real prin tipul `PositionedTextLine` — un record simplu
+  `{text, top, left, height}`) ia toate liniile din toate blocurile ML Kit, le grupează pe rânduri
+  vizuale după suprapunerea centrului vertical (toleranță = un sfert din înălțimea combinată a
+  celor două linii comparate), apoi sortează fiecare rând stânga→dreapta — reface efectiv ordinea
+  de citire corectă indiferent cum a grupat ML Kit blocurile. `scanTalon` rulează asta ÎNAINTE de
+  `parseTalonText` (care rămâne neschimbată — tot restul logicii de extracție presupune deja
+  "etichetă + valoare pe același rând reconstruit", exact ce oferă acum reconstrucția). Aplicat
+  DOAR la `scanTalon` (talon), nu și la `scanRcaPdf` (RCA e text de tip paragraf, nu tabel
+  etichetă/valoare pe două coloane — riscul de amestecare a coloanelor e mult mai mic acolo, nu
+  s-a cerut și nu a fost testat). Teste de regresie cu date geometrice simulate (bounding box-uri
+  derivate din poza reală) în `test/document_scanner_service_test.dart`, grupul
+  `reconstructRowsByPosition (real two-column talon layout)`.
 - `lib/l10n/strings.dart` — clasa `S`, ~90+ getteri/metode de string, fiecare cu ramură RO/EN
   bazată pe `RegionService.instance.language`. Orice text nou afișat în UI trebuie adăugat aici,
   NU hardcodat în ecran.
@@ -540,7 +622,7 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     `add_edit_document_screen.dart`) — utilizatorul poate atașa PDF-ul poliței deja cumpărate, ca
     să-l poată arăta unui polițist offline. Stocat în `photoPath` (reutilizat, fără migrație DB);
     `DocumentTile` arată un buton dedicat „Deschide PDF" (via `open_filex`) când `photoPath` se
-    termină în `.pdf`. La atașare pe un document de tip `rca`/`casco`,
+    termină în `.pdf`. La atașare pe un document de tip `rca`,
     `DocumentScannerService.scanRcaPdf` randează prima pagină ca imagine (`printing`'s
     `Printing.raster`, doar pagina 0 — polițele RCA pun asigurătorul/seria/valabilitatea pe prima
     pagină) și rulează același OCR (`google_mlkit_text_recognition`) folosit pentru talon, apoi
@@ -551,7 +633,21 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     primare (nu doar euristici generice); pentru asigurător e încercată întâi lista
     `_knownInsurers`, apoi fallback pe eticheta „DENUMIRE ASIGURĂTOR:" (tăiată la primul marker
     cunoscut — R.C./C.U.I./Sucursală etc. — ca să nu înghită și câmpurile următoare de pe același
-    rând). Best-effort ca la codul de motor din VIN: nu blochează niciodată atașarea PDF-ului dacă
+    rând). **Doar RCA, nu și CASCO** — utilizatorul a observat corect că scanarea „nu e
+    implementată" pentru CASCO: codul (`scanRcaPdf`/`parseRcaText`) tehnic rulează pentru orice
+    `_isPolicyType`, dar regexurile au fost reglate/testate DOAR pe polițe RCA reale (formatul
+    A.S.F. standardizat de mai sus e specific RCA-ului; CASCO variază mult mai mult între
+    asigurători și n-a fost testat pe niciun document real) — deci în practică nu extrăgea nimic
+    util pentru CASCO. Fix: `add_edit_document_screen.dart` are acum un getter separat
+    `_pdfScansData` (doar `DocumentType.rca`), distinct de `_isPolicyType` (rca + casco, folosit
+    doar pentru eticheta generică „Poză sau PDF" — atașarea simplă a PDF-ului rămâne disponibilă la
+    CASCO, doar extragerea automată nu). `PhotoPickerField` primește acest flag ca
+    `pdfScansData` — controlează dacă butonul PDF apare ca „Scanează date din PDF" (roșu, sare în
+    ochi) sau ca simplu „Atașează PDF" (stil normal) pentru orice alt tip de document (CASCO
+    inclus). Dacă se cere vreodată extinderea scanării reale la CASCO, trebuie reglată/testată
+    separat pe o poliță CASCO reală, la fel cum s-a procedat pentru RCA — nu presupune că
+    regexurile RCA se potrivesc. Best-effort ca la codul de motor din VIN: nu blochează niciodată
+    atașarea PDF-ului dacă
     OCR-ul eșuează sau nu găsește nimic. Test de regresie cu textul real:
     `test/document_scanner_service_test.dart` (`group('parseRcaText', ...)`).
     **Cinci bug-uri reale găsite și fixate testând pe DOUĂ polițe RCA reale trimise de utilizator,
@@ -687,9 +783,12 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   necesită un URL public (repo-ul trebuie să fie public, sau găzduit separat, ex. GitHub Pages);
   vezi și ecranul in-app din `lib/screens/privacy_policy_screen.dart` (text sincronizat manual, nu
   generat din același fișier — vezi punctul 15 din „Funcționalități implementate").
-- Versiune curentă: `1.0.0+1` (`pubspec.yaml`) — potrivită ca prim upload; incrementează
-  `versionCode`-ul (partea de după `+`) la fiecare build nou trimis pe orice track (inclusiv
-  closed testing), Play Console respinge un upload cu același `versionCode` ca unul existent.
+- Versiune curentă: `1.0.0+6` (`pubspec.yaml`) — Play Console respinge un upload cu același
+  `versionCode` (partea de după `+`) ca unul existent. **Regulă cerută explicit de utilizator:
+  incrementează `versionCode`-ul înainte de ORICE build** (`flutter build apk`/`appbundle`, inclusiv
+  build-uri locale de test instalate pe telefon, nu doar upload-urile reale către Play Console) —
+  nu doar la trimiterea pe un track. `versionName`-ul (partea `1.0.0` de dinainte de `+`) rămâne
+  neschimbat până la o schimbare de funcționalitate suficient de mare cât să merite un bump semantic.
 
 ## Convenții
 

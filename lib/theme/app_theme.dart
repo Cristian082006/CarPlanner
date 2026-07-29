@@ -4,6 +4,14 @@ import 'package:flutter/material.dart';
 /// iconița aplicației (albastru→violet) — vezi `assets/icon/`.
 const Color kAccentColor = Color(0xFF5B5FEF);
 
+/// Roșu folosit exclusiv pentru butoanele de acțiune care merită să „sară
+/// în ochi" (scanare talon, sugerează intervale, verifică pe site-ul
+/// oficial, scanează date din PDF) — cerut explicit de utilizator, ca
+/// alternativă vizuală la stilul violet implicit al butoanelor. Nu folosi
+/// pentru alte butoane fără cerere explicită, ca să nu devalorizeze
+/// semnalul vizual.
+const Color kAttentionColor = Color(0xFFE13B3B);
+
 const String _fontFamily = 'Plus Jakarta Sans';
 
 const Color _lightBackground = Color(0xFFFAFAFC);

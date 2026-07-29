@@ -1,7 +1,7 @@
 name: car_planner
 description: "Aplicatie pentru gestionarea masinilor: revizii, carte service, documente si remindere."
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.0+11
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -26,6 +26,7 @@ dependencies:
   printing: ^5.13.4
   open_filex: ^4.5.0
   share_plus: ^12.0.2
+  package_info_plus: ^8.0.2
 
 dev_dependencies:
   flutter_test:

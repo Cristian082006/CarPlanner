@@ -131,6 +131,12 @@ class S {
   static String vinApproximateMatchHint(int year) => _ro
       ? 'Fără potrivire exactă pentru anul $year — verifică anii afișați la fiecare motor înainte să alegi, pot fi de la o altă generație a modelului.'
       : 'No exact match for year $year — check the years shown for each engine before picking, they may be from a different model generation.';
+  static String vinPowerFilterHint(int powerCp) => _ro
+      ? 'Filtrat după puterea de pe talon ($powerCp CP).'
+      : 'Filtered by the power shown on the registration document ($powerCp hp).';
+  static String vinPowerNoMatch(int powerCp) => _ro
+      ? 'Nicio motorizare cu $powerCp CP (puterea de pe talon) — se arată toate variantele.'
+      : 'No engine with $powerCp hp (the power on the registration document) — showing all variants.';
 
   // ---------- Add/Edit service record screen ----------
   static String get editServiceRecord => _ro ? 'Editează revizia' : 'Edit service record';
@@ -276,12 +282,20 @@ class S {
       : 'Done — $updated intervals updated, $added new components added.';
   static String customIntervalSuffix(String source) =>
       _ro ? ' (profil $source)' : ' ($source profile)';
+  static String get customIntervalKmLabel =>
+      _ro ? 'Interval personalizat (km) — opțional' : 'Custom interval (km) — optional';
+  static String get customIntervalKmHint => _ro
+      ? 'Lasă gol pentru valoarea implicită'
+      : 'Leave empty to use the default value';
+  static String get customIntervalSourceManual => _ro ? 'manual' : 'manual';
 
   // ---------- Document / widgets ----------
   static String get validUntil => _ro ? 'Valabil până la ' : 'Valid until ';
   static String get saveToCalendar => _ro ? 'Salvează în calendar' : 'Save to calendar';
   static String get attachPhoto => _ro ? 'Atașează o poză' : 'Attach a photo';
-  static String get attachPdf => _ro ? 'Document PDF' : 'PDF document';
+  static String get attachPdf => _ro ? 'Atașează PDF' : 'Attach PDF';
+  static String get scanDataFromPdf =>
+      _ro ? 'Scanează date din PDF' : 'Scan data from PDF';
   static String get pdfAttachedLabel => _ro ? 'PDF atașat' : 'PDF attached';
   static String get openPdf => _ro ? 'Deschide PDF' : 'Open PDF';
   static String get openPdfFailed =>
@@ -370,7 +384,10 @@ class S {
       ? 'Mai multe limbi vor fi adăugate într-o versiune viitoare.'
       : 'More languages will be added in a future update.';
   static String get versionSectionHeader => _ro ? 'Despre' : 'About';
-  static String get appVersionLabel => _ro ? 'Versiune 1.0' : 'Version 1.0';
+  static String appVersionLabel(String? version) {
+    if (version == null) return _ro ? 'Se încarcă...' : 'Loading...';
+    return _ro ? 'Versiune $version' : 'Version $version';
+  }
   static String get feedbackSectionHeader => _ro ? 'Feedback' : 'Feedback';
   static String get feedbackDescription => _ro
       ? 'Ai găsit o problemă sau ai o sugestie? Trimite-mi un email direct din aplicație.'

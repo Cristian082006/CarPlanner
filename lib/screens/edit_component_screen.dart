@@ -29,6 +29,7 @@ class _EditComponentScreenState extends State<EditComponentScreen> {
   final _db = DatabaseHelper.instance;
   late final TextEditingController _mileageCtrl;
   late final TextEditingController _notesCtrl;
+  late final TextEditingController _customIntervalKmCtrl;
   DateTime? _lastChangedDate;
   bool _saving = false;
 
@@ -37,6 +38,8 @@ class _EditComponentScreenState extends State<EditComponentScreen> {
     super.initState();
     _mileageCtrl = TextEditingController(text: widget.record?.lastChangedMileage?.toString() ?? '');
     _notesCtrl = TextEditingController(text: widget.record?.notes ?? '');
+    _customIntervalKmCtrl =
+        TextEditingController(text: widget.record?.customIntervalKm?.toString() ?? '');
     _lastChangedDate = widget.record?.lastChangedDate;
   }
 
@@ -44,6 +47,7 @@ class _EditComponentScreenState extends State<EditComponentScreen> {
   void dispose() {
     _mileageCtrl.dispose();
     _notesCtrl.dispose();
+    _customIntervalKmCtrl.dispose();
     super.dispose();
   }
 
@@ -60,12 +64,24 @@ class _EditComponentScreenState extends State<EditComponentScreen> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
+    final rawCustomKm = _customIntervalKmCtrl.text.trim();
+    final customIntervalKm = rawCustomKm.isEmpty ? null : int.tryParse(rawCustomKm);
+    // Dacă utilizatorul a setat un km personalizat, sursa devine "manual" —
+    // dacă l-a șters, păstrăm sursa doar dacă mai există o lună personalizată
+    // (setată anterior printr-un profil de mentenanță), altfel o golim și pe
+    // aceea. Luna personalizată nu are câmp propriu aici — rămâne neatinsă.
+    final customIntervalSource = customIntervalKm != null
+        ? S.customIntervalSourceManual
+        : (widget.record?.customIntervalMonths != null ? widget.record?.customIntervalSource : null);
     final record = ComponentRecord(
       vehicleId: widget.vehicleId,
       componentId: widget.definition.id,
       lastChangedDate: _lastChangedDate,
       lastChangedMileage: int.tryParse(_mileageCtrl.text.trim()),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      customIntervalKm: customIntervalKm,
+      customIntervalMonths: widget.record?.customIntervalMonths,
+      customIntervalSource: customIntervalSource,
     );
     await _db.upsertComponentRecord(record);
     await NotificationService.instance.scheduleComponentReminder(
@@ -123,6 +139,15 @@ class _EditComponentScreenState extends State<EditComponentScreen> {
           TextFormField(
             controller: _mileageCtrl,
             decoration: InputDecoration(labelText: S.mileageAtLastChange),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _customIntervalKmCtrl,
+            decoration: InputDecoration(
+              labelText: S.customIntervalKmLabel,
+              hintText: S.customIntervalKmHint,
+            ),
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 12),

@@ -14,6 +14,8 @@ class ScannedVehicleData {
   final String? vin;
   final String? plateNumber;
   final String? engineCode;
+  final int? year;
+  final int? powerCp;
   final String rawText;
 
   ScannedVehicleData({
@@ -22,11 +24,13 @@ class ScannedVehicleData {
     this.vin,
     this.plateNumber,
     this.engineCode,
+    this.year,
+    this.powerCp,
     required this.rawText,
   });
 
   int get fieldsFound =>
-      [make, model, vin, plateNumber, engineCode].where((v) => v != null).length;
+      [make, model, vin, plateNumber, engineCode, year, powerCp].where((v) => v != null).length;
 }
 
 /// Date extrase din prima pagină a unui PDF de poliță RCA/CASCO. La fel ca
@@ -50,6 +54,120 @@ class ScannedRcaData {
 
   int get fieldsFound =>
       [provider, policyNumber, startDate, expiryDate].where((v) => v != null).length;
+}
+
+/// O linie de text recunoscută de ML Kit, cu poziția ei geometrică pe
+/// imagine (colțul stânga-sus + lățime + înălțime) — suficient pentru
+/// gruparea pe coloane/rânduri vizuale din [reconstructRowsByPosition].
+/// Extras separat de tipul concret al ML Kit (`TextLine`) ca funcția de
+/// reconstrucție să poată fi testată direct, cu date simulate, fără să
+/// depindă de OCR real.
+typedef PositionedTextLine = ({String text, double top, double left, double width, double height});
+
+/// O linie e considerată un fragment "gol" (doar etichetă, fără valoare
+/// atașată, ex. "E", "D.3", "B") dacă raportul lățime/înălțime e mic — un
+/// cod scurt de 1-3 caractere e aproximativ la fel de lat cât de înalt,
+/// spre deosebire de un rând deja complet ("D.3 FOCUS", "E WV1ZZZ...") care
+/// e mult mai lat decât înalt. Pragul (2.2) a fost calibrat pe date reale
+/// (talon Ford Focus cu anexă): valori scurte de 2 cifre ca "P.2 88" ies
+/// tot sub prag (deci tot caută pereche), dar valori de 3+ caractere ca
+/// "R ALB" ies clar peste — vezi comentariul de la [reconstructRowsByPosition].
+bool _looksLikeBareLabelFragment(PositionedTextLine line) =>
+    line.height > 0 && (line.width / line.height) < 2.2;
+
+/// Reconstruiește ordinea "vizuală" (rând cu rând, stânga→dreapta) a
+/// liniilor de text recunoscute, pe baza poziției geometrice — nu a ordinii
+/// brute întoarse de blocurile ML Kit.
+///
+/// Talonul românesc poate avea o etichetă îngustă lângă valoarea ei
+/// (același câmp, ex. "D.3" + "TUCSON") — ML Kit grupează des astea în
+/// blocuri SEPARATE, deci trebuie reasamblate pe același rând (bug
+/// reprodus pe o poză reală: D.3 ajungea urmat de "E", eticheta următoare,
+/// nu de valoarea reală). Dar talonul cu anexă are și mai multe GRUPURI de
+/// câmpuri complet independente unul lângă altul (ex. coloana A/D.1/D.3/E,
+/// apoi o a doua coloană B/P.1/P.2, apoi ANEXA) — dacă aceste grupuri au
+/// densități diferite de rânduri, la un moment dat rândurile lor ajung la
+/// aceeași înălțime pe verticală (goluri orizontale între grupuri prea mici
+/// și de mărime comparabilă cu golul etichetă→valoare ca să le distingem
+/// după poziție) — bug reprodus pe o poză reală de Ford Focus cu anexă:
+/// modelul a ieșit ca fragment din rândul VIN al altei coloane.
+///
+/// Soluție: nu ne mai bazăm pe o singură trecere de sus în jos care
+/// asamblează rândurile pe măsură ce le întâlnește — o etichetă procesată
+/// mai devreme poate "fura" din greșeală o valoare apropiată dar greșită,
+/// doar pentru că valoarea ei REALĂ (puțin mai departe pe verticală) încă
+/// nu fusese "văzută" în acel moment al trecerii (bug reprodus pe o poză
+/// reală de talon Hyundai: eticheta "D.2" ajungea perechea cu data de la
+/// câmpul I.1, de pe altă coloană, disponibilă mai devreme în ordine, în
+/// loc de propria ei valoare reală "TLE F5D14" — care exista, dar mai
+/// târziu în listă). În schimb: generăm ÎNTÂI toate perechile candidate
+/// posibile (etichetă goală + valoare) din toată pagina, condiționat de
+/// (1) exact una dintre cele două linii să fie un fragment "gol" de
+/// etichetă ([_looksLikeBareLabelFragment]) — două etichete goale nu se
+/// leagă niciodată una de alta, și nici două rânduri deja complete; (2)
+/// distanța orizontală dintre ele să nu depășească un prag generos
+/// (multiplu din înălțimea mediană a liniilor) — separă o pereche
+/// etichetă/valoare de pe ACEEAȘI coloană (gol mic) de o valoare de pe altă
+/// coloană (gol mult mai mare, de obicei un salt pe toată lățimea
+/// paginii). Apoi le asignăm LACOM, sortate global după apropierea pe
+/// verticală (cea mai bună pereche întâi), fiecare linie fiind folosită
+/// o singură dată — indiferent de ordinea în care apar pe pagină.
+String reconstructRowsByPosition(List<PositionedTextLine> lines) {
+  if (lines.isEmpty) return '';
+  final heights = [for (final l in lines) l.height]..sort();
+  final medianHeight = heights[heights.length ~/ 2];
+  final maxHorizontalGap = medianHeight * 6;
+
+  final candidates = <(int, int, double)>[];
+  for (var i = 0; i < lines.length; i++) {
+    for (var j = i + 1; j < lines.length; j++) {
+      final a = lines[i];
+      final b = lines[j];
+      if (_looksLikeBareLabelFragment(a) == _looksLikeBareLabelFragment(b)) continue;
+      final yDiff = ((a.top + a.height / 2) - (b.top + b.height / 2)).abs();
+      final yTolerance = (a.height + b.height) * 0.7;
+      if (yDiff > yTolerance) continue;
+      if (_horizontalGap(a, b) > maxHorizontalGap) continue;
+      candidates.add((i, j, yDiff));
+    }
+  }
+  candidates.sort((x, y) => x.$3.compareTo(y.$3));
+
+  final partner = List<int?>.filled(lines.length, null);
+  for (final (i, j, _) in candidates) {
+    if (partner[i] != null || partner[j] != null) continue;
+    partner[i] = j;
+    partner[j] = i;
+  }
+
+  final rows = <List<PositionedTextLine>>[];
+  final consumed = List<bool>.filled(lines.length, false);
+  for (var i = 0; i < lines.length; i++) {
+    if (consumed[i]) continue;
+    consumed[i] = true;
+    final j = partner[i];
+    if (j != null) {
+      consumed[j] = true;
+      rows.add([lines[i], lines[j]]);
+    } else {
+      rows.add([lines[i]]);
+    }
+  }
+  rows.sort((a, b) => a.map((l) => l.top).reduce((x, y) => x < y ? x : y).compareTo(
+      b.map((l) => l.top).reduce((x, y) => x < y ? x : y)));
+
+  return rows.map((row) {
+    final sortedRow = [...row]..sort((a, b) => a.left.compareTo(b.left));
+    return sortedRow.map((l) => l.text).join(' ');
+  }).join('\n');
+}
+
+double _horizontalGap(PositionedTextLine a, PositionedTextLine b) {
+  final aRight = a.left + a.width;
+  final bRight = b.left + b.width;
+  if (a.left > bRight) return a.left - bRight;
+  if (b.left > aRight) return b.left - aRight;
+  return 0;
 }
 
 /// Recunoaște text de pe o poză a talonului folosind Google ML Kit (rulează
@@ -79,6 +197,12 @@ class DocumentScannerService {
   /// punctuație — `(?![A-Za-z])` acceptă orice separator (sau capătul
   /// liniei) după "E", dar nu confundă cuvinte care încep cu E ("Euro...").
   static final RegExp _vinFieldCode = RegExp(r'^E(?![A-Za-z])', caseSensitive: false);
+
+  /// Eticheta câmpului B (data primei înmatriculări) de pe talonul
+  /// armonizat UE — confirmat de utilizator că funcționează pe talonul lui
+  /// real ca proxy pentru anul de fabricație (talonul românesc nu are un
+  /// câmp separat, standardizat, dedicat exclusiv anului de fabricație).
+  static final RegExp _yearFieldCode = RegExp(r'^B(?![A-Za-z])', caseSensitive: false);
 
   /// Literele I, O, Q nu apar niciodată într-un VIN real (excluse explicit
   /// din standard ca să nu se confunde cu 1/0). OCR-ul le scrie totuși
@@ -110,6 +234,16 @@ class DocumentScannerService {
   /// propria linie, între linia mărcii și linia cu valoarea modelului).
   static final RegExp _modelFieldCode = RegExp(r'\bD\.?\s*3\b', caseSensitive: false);
 
+  /// Codul de câmp P.2 (puterea maximă netă) de pe talonul armonizat UE —
+  /// mereu în kW (confirmat de utilizator pe talonul lui real; o încercare
+  /// anterioară de a citi și o valoare CP direct dintr-o paranteză de pe
+  /// același rând s-a dovedit greșită — paranteza e de fapt turația
+  /// motorului (min⁻¹), nu CP, și putea fi confundată cu CP la valori mici).
+  /// Convertim noi kW→CP (1 kW ≈ 1,35962 CP) și rotunjim — asta e valoarea
+  /// folosită la filtrarea motoarelor candidate mai jos.
+  static final RegExp _powerFieldCode = RegExp(r'\bP\.?\s*2\b', caseSensitive: false);
+  static final RegExp _powerValueSinglePattern = RegExp(r'(\d{2,3})');
+
   /// Eticheta pentru codul motor — spre deosebire de D.3 (model), talonul
   /// românesc NU are un câmp standardizat UE dedicat pentru asta, deci
   /// extragerea e best-effort: caută explicit cuvântul "motor" ca etichetă
@@ -134,7 +268,19 @@ class DocumentScannerService {
     try {
       final inputImage = InputImage.fromFilePath(imagePath);
       final result = await recognizer.processImage(inputImage);
-      return parseTalonText(result.text);
+      final positioned = <PositionedTextLine>[
+        for (final block in result.blocks)
+          for (final line in block.lines)
+            (
+              text: line.text,
+              top: line.boundingBox.top,
+              left: line.boundingBox.left,
+              width: line.boundingBox.width,
+              height: line.boundingBox.height,
+            ),
+      ];
+      final reconstructed = reconstructRowsByPosition(positioned);
+      return parseTalonText(reconstructed.isEmpty ? result.text : reconstructed);
     } finally {
       await recognizer.close();
     }
@@ -168,6 +314,46 @@ class DocumentScannerService {
         final compact = _fixVinOcrConfusables(raw.toUpperCase()).replaceAll(RegExp(r'[\s-]'), '');
         if (RegExp(r'^[A-HJ-NPR-Z0-9]{17}$').hasMatch(compact)) {
           labeledVin = compact;
+          break;
+        }
+      }
+      break;
+    }
+
+    // Anul, ancorat de câmpul B (data primei înmatriculări) — vezi
+    // comentariul de la [_yearFieldCode].
+    int? year;
+    for (var i = 0; i < lines.length; i++) {
+      if (!_yearFieldCode.hasMatch(lines[i])) continue;
+      final sameLineValue = lines[i].replaceFirst(_yearFieldCode, '').trim();
+      final candidates = [sameLineValue, if (i + 1 < lines.length) lines[i + 1]];
+      for (final raw in candidates) {
+        final dateMatch = _datePattern.firstMatch(raw);
+        if (dateMatch == null) continue;
+        final parsedYear = int.tryParse(dateMatch.group(3)!);
+        final currentYear = DateTime.now().year;
+        if (parsedYear != null && parsedYear >= 1950 && parsedYear <= currentYear + 1) {
+          year = parsedYear;
+          break;
+        }
+      }
+      break;
+    }
+
+    // Puterea, ancorată de câmpul P.2 — mereu kW, convertit în CP (vezi
+    // comentariul de la [_powerFieldCode]).
+    int? powerCp;
+    for (var i = 0; i < lines.length; i++) {
+      final labelMatch = _powerFieldCode.firstMatch(lines[i]);
+      if (labelMatch == null) continue;
+      final sameLineValue = lines[i].substring(labelMatch.end);
+      final candidates = [sameLineValue, if (i + 1 < lines.length) lines[i + 1]];
+      for (final raw in candidates) {
+        final match = _powerValueSinglePattern.firstMatch(raw);
+        if (match == null) continue;
+        final kw = int.tryParse(match.group(1)!);
+        if (kw != null && kw >= 15 && kw <= 500) {
+          powerCp = (kw * 1.35962).round();
           break;
         }
       }
@@ -250,6 +436,8 @@ class DocumentScannerService {
       vin: labeledVin ?? vinMatch?.group(0),
       plateNumber: plateNumber,
       engineCode: engineCode,
+      year: year,
+      powerCp: powerCp,
       rawText: rawText,
     );
   }

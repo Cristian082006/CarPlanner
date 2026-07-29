@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -18,6 +19,24 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _region = RegionService.instance;
+
+  // Citit din `pubspec.yaml` la runtime (via `package_info_plus`), nu mai e
+  // hardcodat — un string fix ("Versiune 1.0") rămânea mereu în urmă, de
+  // fiecare dată când `versionCode`-ul era incrementat înainte de un build
+  // (regulă cerută explicit de utilizator, vezi CLAUDE.md).
+  String? _versionLabel;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() => _versionLabel = '${info.version} (${info.buildNumber})');
+  }
 
   Future<void> _sendFeedback(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -108,7 +127,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 32),
               _SectionHeader(S.versionSectionHeader),
               Text(
-                S.appVersionLabel,
+                S.appVersionLabel(_versionLabel),
                 style: Theme.of(context)
                     .textTheme
                     .bodyMedium

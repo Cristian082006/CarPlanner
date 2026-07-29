@@ -39,15 +39,6 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
   bool _saving = false;
   bool _scanning = false;
 
-  /// Puterea (CP) citită de pe talon la ultima scanare (câmpul P.2) — dacă
-  /// e disponibilă, restrânge lista de motoare candidate arătată de
-  /// [_decodeVinEngine] la variantele cu aceeași putere, ca să nu mai
-  /// trebuiască utilizatorul să aleagă orbește între motoare cu coduri
-  /// diferite dar aceeași capacitate (ex. IQDB 125cp vs. MUDA 120cp pe
-  /// Focus). `null` dacă nu s-a scanat încă talonul sau OCR-ul nu a găsit
-  /// P.2 — în acel caz lista rămâne nefiltrată, ca înainte.
-  int? _scannedPowerCp;
-
   bool get _isEditing => widget.vehicle != null;
 
   @override
@@ -115,7 +106,6 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       if (data.plateNumber != null) _plateCtrl.text = data.plateNumber!;
       if (data.engineCode != null) _engineCodeCtrl.text = data.engineCode!;
       if (data.year != null) _yearCtrl.text = data.year!.toString();
-      _scannedPowerCp = data.powerCp;
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -160,35 +150,7 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       return;
     }
 
-    // Dacă talonul a fost scanat și P.2 a fost recunoscut, restrângem
-    // lista la motoarele cu exact acea putere — de obicei disambiguează
-    // complet (ex. IQDB 125cp vs. MUDA 120cp pe același model/an). Dacă
-    // nimic nu se potrivește (OCR greșit, sau catalogul nu are exact acel
-    // motor), arătăm în continuare toate candidatele, ca să nu blocăm
-    // utilizatorul — vezi [_scannedPowerCp].
-    var filteredResult = result;
-    final targetPower = _scannedPowerCp;
-    if (targetPower != null) {
-      final matched =
-          result.candidates.where((c) => c['putere_cp'] == targetPower).toList();
-      if (matched.isNotEmpty) {
-        filteredResult = EngineCandidatesResult(
-          candidates: matched,
-          tier: result.tier,
-          modelYear: result.modelYear,
-          detectedMake: result.detectedMake,
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(S.vinPowerFilterHint(targetPower))),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(S.vinPowerNoMatch(targetPower))),
-        );
-      }
-    }
-
-    final chosen = await showEngineCandidatesDialog(context, filteredResult);
+    final chosen = await showEngineCandidatesDialog(context, result);
     if (chosen == null) return;
     setState(() {
       _engineCodeCtrl.text = chosen['cod_motor'] as String;
@@ -351,14 +313,13 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _vinCtrl,
-              decoration: InputDecoration(
-                labelText: S.vinOptional,
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.settings_input_component_outlined),
-                  tooltip: S.decodeEngineFromVin,
-                  onPressed: _decodeVinEngine,
-                ),
-              ),
+              decoration: InputDecoration(labelText: S.vinOptional),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _decodeVinEngine,
+              icon: const Icon(Icons.settings_input_component_outlined),
+              label: Text(S.decodeEngineFromVin),
             ),
             const SizedBox(height: 12),
             Row(

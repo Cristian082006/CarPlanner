@@ -103,7 +103,7 @@ class S {
       ? 'Scanarea a eșuat. Completează câmpurile manual.'
       : 'Scan failed. Please fill in the fields manually.';
   static String get decodeEngineFromVin =>
-      _ro ? 'Decodifică motor din VIN' : 'Decode engine from VIN';
+      _ro ? 'Completare motorizare!' : 'Fill in engine info!';
   static String get vinInvalidFormat => _ro
       ? 'VIN invalid — trebuie să aibă 17 caractere (fără I, O, Q).'
       : 'Invalid VIN — must be 17 characters (no I, O, Q).';
@@ -131,12 +131,6 @@ class S {
   static String vinApproximateMatchHint(int year) => _ro
       ? 'Fără potrivire exactă pentru anul $year — verifică anii afișați la fiecare motor înainte să alegi, pot fi de la o altă generație a modelului.'
       : 'No exact match for year $year — check the years shown for each engine before picking, they may be from a different model generation.';
-  static String vinPowerFilterHint(int powerCp) => _ro
-      ? 'Filtrat după puterea de pe talon ($powerCp CP).'
-      : 'Filtered by the power shown on the registration document ($powerCp hp).';
-  static String vinPowerNoMatch(int powerCp) => _ro
-      ? 'Nicio motorizare cu $powerCp CP (puterea de pe talon) — se arată toate variantele.'
-      : 'No engine with $powerCp hp (the power on the registration document) — showing all variants.';
 
   // ---------- Add/Edit service record screen ----------
   static String get editServiceRecord => _ro ? 'Editează revizia' : 'Edit service record';

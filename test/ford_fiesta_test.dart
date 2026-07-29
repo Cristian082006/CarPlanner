@@ -57,6 +57,6 @@ void main() {
 
     final polo = await dbHelper.getCandidateEnginesForVin(
         marca: 'Volkswagen', model: 'Polo', year: 2010);
-    expect(polo.length, 6);
+    expect(polo.length, 15); // 6 originale + 9 adăugate la v32
   });
 }

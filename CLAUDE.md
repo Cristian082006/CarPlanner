@@ -117,6 +117,38 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   `_scannedPowerCp` — populat din `document_scanner_service.dart`, care extrage P.2 ca pereche
   "kW (CP)" dacă valoarea din paranteză e plauzibilă ca putere, altfel convertește kW→CP; extrage și
   anul din câmpul B, la fel — ambele confirmate de utilizator că funcționează pe talonul lui real).
+  **v32 (motorizări VW Polo lipsă, la cerere explicită):** utilizatorul a observat, testând
+  filtrarea din decodarea VIN pe un Polo, că multe motorizări reale lipseau din catalog (doar 6
+  existau pentru Polo). Cercetare web cu minim 2 surse independente per motor (auto-data.net,
+  autodoc, ultimatespecs, proxyparts, mymotorlist, zeperfs, encycarpedia) — adăugate 9 motorizări
+  noi (model_id 219): **ASY** (1.9 SDI 64, 2001-2009), **BME** (1.2 12V 64, 2001-2007), **BNM**
+  (1.4 TDI 70, 2005-2009, predecesorul lui CFWA), **BTS** (1.6 16V 105, 2006-2010), **CFW** (1.2
+  TDI 75, 2009-2014), **CAYC** (1.6 TDI 90, 2009-2015), **CTHE** (1.4 TSI GTI 180, 2010-2014),
+  **CHYA**/**CHYB** (1.0 MPI atmosferic 65/75cp, 2017+, distinct de CHZC/DKRF care sunt 1.0 TSI
+  turbo). **NU** adăugate (surse insuficiente/ambigue la o singură căutare): BMD (1.2 6V), BBY/BUD
+  (1.4 16V — posibil același motor fizic ca AUA deja existent, sub alt cod, neclar diferențiat),
+  DKFC (nicio sursă găsită), și inițial presupusul "ANJ" pentru 1.2 TDI 75cp — corectat la **CFW**
+  înainte de adăugare, după ce cercetarea n-a confirmat codul ANJ. **Bug real găsit și fixat în
+  timpul acestei actualizări**: primele rânduri au fost inserate greșit în MIJLOCUL tabelei
+  `motoare` (imediat după blocul Polo existent), ceea ce a deplasat id-urile auto-increment ale
+  TUTUROR rândurilor de după — a stricat exact regula de distribuție hardcodată pentru codurile
+  Fiesta 1.6 TDCi de la v13 (`test/ford_fiesta_test.dart` a prins bug-ul imediat). Fix: rândurile
+  noi mutate la FINALUL absolut al tabelei `motoare` (după ultimul rând Ford), fără să atingă
+  id-ul niciunui rând existent — regulă deja documentată mai jos, dar încălcată din neatenție la
+  prima încercare; verificat cu teste (`test/polo_engines_test.dart`, plus corectarea contorului
+  vechi din `test/ford_fiesta_test.dart` de la 6 la 15 motorizări Polo). Inițial nu s-au adăugat
+  reguli de interval specifice pentru cele 9 motoare noi (rămân pe fallback generic per
+  combustibil) — dar utilizatorul a cerut imediat după o trecere dedicată de verificare, la fel ca
+  la celelalte mărci din istoric. **Rezultat cercetare (tot v32, aceeași sesiune):** cele 4 motoare
+  diesel noi (ASY/BNM/CFW/CAYC) au primit regulă specifică — **15000 km/12 luni**, surse UK
+  (autodoc.co.uk, buycarparts.co.uk, uk-polos.net, oil-change.info) convergente, exact aceeași
+  cifră ca la fix-ul VAG TDI CR de la v26 (schema Fixed, aleasă acolo ca fiind mai sigură decât
+  Longlife/Variable) — deși ASY (1.9 SDI) e tehnic injecție indirectă, nu common-rail, cifra
+  practică de schimb ulei iese identică. Cele 5 motoare pe benzină (BME/BTS/CTHE/CHYA/CHYB) rămân
+  pe fallback generic — nicio sursă dedicată găsită pentru ele, nu era scopul cercetării. Regula a
+  fost adăugată printr-un `INSERT...SELECT` după `cod_motor` (nu id-uri hardcodate), tocmai ca să
+  nu repete bug-ul de mai sus dacă motoarele s-ar reordona vreodată. Verificat cu teste
+  (`test/polo_engines_test.dart`).
   **Atenție la migrații reutilizate:**
   `_createComponentRecordsTable` construiește schema originală v2 (fără coloanele custom*) fiindcă
   e refolosită de calea de upgrade `oldVersion<2` — `_onCreate` aplică deltele ulterioare (ALTER)
@@ -129,8 +161,9 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   nameplate (un singur „Fiesta”, un singur „Golf”...), fără distincție de generație (cerut explicit
   de utilizator: căutarea pe marcă+model+an să întoarcă TOATE motorizările modelului, nu doar pe
   cele ale unei generații). 26 mărci / **245 modele** (235 din export + cele 10 modele Ford
-  adăugate manual la v29, vezi mai jos) / **781 motorizări** (756 din export + cele 7
-  coduri reale Fiesta VI 1.6 TDCi de la v13 — HHJC/HHJD/HHJE/TZJA/TZJB/T1JA/UBJA — re-adăugate
+  adăugate manual la v29, vezi mai jos) / **790 motorizări** (756 din export + cele 7
+  coduri reale Fiesta VI 1.6 TDCi de la v13 — HHJC/HHJD/HHJE/TZJA/TZJB/T1JA/UBJA — + cele 9
+  motorizări VW Polo de la v32 — ASY/BME/BNM/BTS/CFW/CAYC/CTHE/CHYA/CHYB — toate re-adăugate
   manual la finalul secțiunilor `motoare`/`intervale_mentenanta` fiindcă **lipsesc din exportul
   consolidat**; nu le șterge la o portare viitoare fără să verifici că noul export le conține) /
   1075+14 reguli specifice (doar distribuție, componentele 5/6 — restul componentelor vin din

@@ -30,7 +30,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'car_planner.db');
     return openDatabase(
       path,
-      version: 31,
+      version: 32,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -481,6 +481,20 @@ class DatabaseHelper {
       // luni, sursă clară); restul gamei Ford rămâne ambiguă, ca VW/BMW/
       // Mercedes înainte de re-verificările lor dedicate. Vezi comentariile
       // din vehicle_reference_data.dart. Același drop+reseed.
+      await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
+      await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
+      await db.execute('DROP TABLE IF EXISTS intervale_generice');
+      await db.execute('DROP TABLE IF EXISTS componente');
+      await db.execute('DROP TABLE IF EXISTS motoare');
+      await db.execute('DROP TABLE IF EXISTS modele');
+      await db.execute('DROP TABLE IF EXISTS marci');
+      await _seedReferenceData(db);
+    }
+    if (oldVersion < 32) {
+      // v32: adăugate 9 motorizări VW Polo lipsă din catalog, cercetate la
+      // cererea utilizatorului (ASY/BME/BNM/BTS/CFW/CAYC/CTHE/CHYA/CHYB) —
+      // vezi comentariile din vehicle_reference_data.dart. Același
+      // drop+reseed.
       await db.execute('DROP VIEW IF EXISTS mentenanta_completa');
       await db.execute('DROP TABLE IF EXISTS intervale_mentenanta');
       await db.execute('DROP TABLE IF EXISTS intervale_generice');

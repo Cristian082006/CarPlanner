@@ -1307,7 +1307,35 @@ const List<String> referenceDataStatements = [
     (243, 'WLAT', '2.5 TDCi 143', 2499, 143, 4, 'Diesel', 'Curea', 2006, 2011),
     (243, 'P4AT', '2.2 TDCi 160', 2198, 160, 4, 'Diesel', 'Lant', 2011, 2022),
     (243, 'P5AT', '3.2 TDCi 200', 3198, 200, 5, 'Diesel', 'Lant', 2011, 2022),
-    (243, 'YN2X', '2.0 EcoBlue Bi-Turbo 213', 1996, 213, 4, 'Diesel', 'Lant', 2019, 2022)""",
+    (243, 'YN2X', '2.0 EcoBlue Bi-Turbo 213', 1996, 213, 4, 'Diesel', 'Lant', 2019, 2022),
+    -- Adăugate la v32 (cerere utilizator), la FINALUL tabelei ca să nu
+    -- deraieze id-urile auto-increment ale rândurilor de mai sus (ex.
+    -- codurile Fiesta TDCi de la v13, referite prin motor_id hardcodat în
+    -- intervale_mentenanta) — vezi avertismentul din CLAUDE.md despre
+    -- reordonare. Motorizări VW Polo (model_id=219) lipsă din catalog,
+    -- cercetate cu minim 2 surse independente per motor (auto-data.net,
+    -- autodoc, ultimatespecs, proxyparts, mymotorlist, zeperfs,
+    -- encycarpedia) — ASY (1.9 SDI, 9N) și BME (1.2 12V, 9N) completează
+    -- gama alături de AUA/AMF deja existente; BNM (1.4 TDI 70) e
+    -- predecesorul lui CFWA; BTS (1.6 16V 105) și CTHE (1.4 TSI GTI 180)
+    -- sunt variante de performanță/facelift fără regulă specifică de
+    -- interval; CFW (1.2 TDI 75) și CAYC (1.6 TDI 90) sunt generația 6R;
+    -- CHYA/CHYB (1.0 MPI, atmosferic, 65/75cp) sunt varianta NEturbo a
+    -- 1.0-ului, distinctă de CHZC/DKRF (1.0 TSI, turbo) deja în catalog.
+    -- NU adăugate (surse insuficiente/ambigue la o singură căutare): BMD
+    -- (1.2 6V, doar o sursă clară pentru putere), BBY/BUD (1.4 16V —
+    -- posibil același motor fizic ca AUA sub alt cod, neclar diferențiat),
+    -- DKFC (nicio sursă găsită), ANJ (cod neconfirmat — varianta reală de
+    -- 1.2 TDI 75cp pare să fie CFW, nu ANJ, corectat înainte de adăugare).
+    (219, 'ASY', '1.9 SDI 64', 1896, 64, 4, 'Diesel', 'Curea', 2001, 2009),
+    (219, 'BME', '1.2 12V 64', 1198, 64, 4, 'Benzina', 'Curea', 2001, 2007),
+    (219, 'BNM', '1.4 TDI 70', 1422, 70, 3, 'Diesel', 'Curea', 2005, 2009),
+    (219, 'BTS', '1.6 16V 105', 1598, 105, 4, 'Benzina', 'Curea', 2006, 2010),
+    (219, 'CFW', '1.2 TDI 75', 1199, 75, 3, 'Diesel', 'Curea', 2009, 2014),
+    (219, 'CAYC', '1.6 TDI 90', 1598, 90, 4, 'Diesel', 'Curea', 2009, 2015),
+    (219, 'CTHE', '1.4 TSI GTI 180', 1390, 180, 4, 'Benzina', 'Lant', 2010, 2014),
+    (219, 'CHYA', '1.0 MPI 65', 999, 65, 3, 'Benzina', 'Lant', 2017, 2021),
+    (219, 'CHYB', '1.0 MPI 75', 999, 75, 3, 'Benzina', 'Lant', 2017, NULL)""",
   // completează cheia normalizată de căutare (majuscule, fără spații/
   // liniuțe/puncte) — aceeași normalizare ca `normalizeEngineCode`.
   """UPDATE motoare SET cod_motor_key =
@@ -2880,6 +2908,19 @@ const List<String> referenceDataStatements = [
     (779, 1, 15000, 12, 'Interval oficial Ford Ranger diesel (sursa AUTODOC + forum UK, incredere moderata)'),
     (780, 1, 15000, 12, 'Interval oficial Ford Ranger diesel (sursa AUTODOC + forum UK, incredere moderata)'),
     (781, 1, 15000, 12, 'Interval oficial Ford Ranger diesel (sursa AUTODOC + forum UK, incredere moderata)')""",
+  // v32 — interval de ulei pentru cele 4 motoare diesel VW Polo adaugate
+  // mai sus (ASY/BNM/CFW/CAYC), la cererea utilizatorului. Surse UK
+  // (autodoc.co.uk, buycarparts.co.uk, uk-polos.net, oil-change.info) —
+  // toate cele 4 converg pe 15000 km/12 luni pe schema Fixed, aceeasi
+  // cifra ca la fix-ul VAG TDI CR de la v26 (ales acolo ca fiind mai sigur
+  // decat schema Longlife/Variable, pana la 30000 km). Foloseste un
+  // INSERT...SELECT dupa cod_motor (nu id-uri hardcodate) tocmai ca sa
+  // evite bug-ul real gasit in timpul adaugarii motoarelor (id-uri
+  // deplasate de o inserare gresita in mijlocul tabelei motoare) — vezi
+  // comentariul de mai sus, langa randurile ASY/BME/BNM/etc.
+  """INSERT INTO intervale_mentenanta (motor_id, componenta_id, interval_km, interval_luni, observatii)
+    SELECT id, 1, 15000, 12, 'Interval oficial VW Polo diesel (surse UK: autodoc.co.uk/buycarparts.co.uk/uk-polos.net, incredere moderata)'
+    FROM motoare WHERE model_id = 219 AND cod_motor IN ('ASY', 'BNM', 'CFW', 'CAYC')""",
 ];
 
 /// Normalizează un cod de motor (majuscule, fără spații/liniuțe/puncte) —

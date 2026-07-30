@@ -59,4 +59,26 @@ void main() {
         marca: 'Volkswagen', model: 'Polo', year: 2010);
     expect(polo.length, 15); // 6 originale + 9 adăugate la v32
   });
+
+  test(
+      'BMW "420d" (denumire comercială a motorului) e găsit chiar dacă modelul din catalog e "Seria 4"',
+      () async {
+    final dbHelper = DatabaseHelper.instance;
+    await dbHelper.database;
+
+    // Bug real: utilizatorii completează modelul mașinii cu denumirea
+    // comercială (420d), nu cu nameplate-ul din catalog (Seria 4) — căutarea
+    // trebuie să verifice ambele coloane, nu doar modele.nume. Catalogul are
+    // 2 motoare diesel cu denumirea comercială "420d" (N47D20 și B47D20, pre/
+    // post 2020) — ambele trebuie găsite, spre deosebire de "Seria 4"
+    // (nameplate-ul din catalog), care întoarce toate cele 4 motorizări
+    // (2 diesel + 2 benzină).
+    final byTrim = await dbHelper.getCandidateEnginesForVin(
+        marca: 'BMW', model: '420d', year: 2015);
+    expect(byTrim.map((e) => e['cod_motor']).toSet(), {'N47D20', 'B47D20'});
+
+    final byNameplate = await dbHelper.getCandidateEnginesForVin(
+        marca: 'BMW', model: 'Seria 4', year: 2015);
+    expect(byNameplate.length, 4);
+  });
 }

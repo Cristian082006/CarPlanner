@@ -924,6 +924,19 @@ class DatabaseHelper {
   /// restrânge catalogul existent la ce e plauzibil pentru marca/anul găsite,
   /// utilizatorul alegând motorul exact din listă. `null`/gol dacă [marca]
   /// lipsește.
+  ///
+  /// Potrivirea pe model verifică ATÂT `modele.nume` (nameplate-ul oficial,
+  /// ex. "Seria 4") CÂT ȘI `motoare.denumire_comerciala` (denumirea comercială
+  /// a motorului, ex. "420d") — bug real reprodus de un utilizator: BMW-urile
+  /// (și alte mărci cu denumiri "cifră+literă", ex. Mercedes C220d) sunt
+  /// aproape mereu identificate de proprietari după denumirea comercială
+  /// ("420d"), nu după nameplate-ul din catalog ("Seria 4"), iar cascada din
+  /// `engine_lookup.dart` NU lărgește căutarea la toată marca atunci când
+  /// modelul a fost completat (deliberat, ca să nu arate motoare de la alt
+  /// model) — deci un model necunoscut, deși de fapt valid, întorcea listă
+  /// goală. `denumire_comerciala` există deja per motor în catalog (ex.
+  /// "420d"/"420i" pentru codurile N47D20/B47D20/N20B20/B48B20 de pe BMW
+  /// Seria 4), doar căutarea nu îl folosea până acum.
   Future<List<Map<String, Object?>>> getCandidateEnginesForVin({
     String? marca,
     String? model,
@@ -936,8 +949,10 @@ class DatabaseHelper {
     final where = StringBuffer('LOWER(ma.nume) = ?');
     final args = <Object?>[marca.trim().toLowerCase()];
     if (matchModel && model != null && model.trim().isNotEmpty) {
-      where.write(' AND LOWER(mo.nume) LIKE ?');
-      args.add('%${model.trim().toLowerCase()}%');
+      where.write(' AND (LOWER(mo.nume) LIKE ? OR LOWER(mt.denumire_comerciala) LIKE ?)');
+      final pattern = '%${model.trim().toLowerCase()}%';
+      args.add(pattern);
+      args.add(pattern);
     }
     if (matchYear && year != null) {
       where.write(' AND (mo.an_start IS NULL OR mo.an_start <= ?)');

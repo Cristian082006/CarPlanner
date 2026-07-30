@@ -131,6 +131,13 @@ class S {
   static String vinApproximateMatchHint(int year) => _ro
       ? 'Fără potrivire exactă pentru anul $year — verifică anii afișați la fiecare motor înainte să alegi, pot fi de la o altă generație a modelului.'
       : 'No exact match for year $year — check the years shown for each engine before picking, they may be from a different model generation.';
+  static String get itpExpiryFoundTitle =>
+      _ro ? 'Dată ITP găsită pe talon' : 'ITP expiry date found on the registration';
+  static String itpExpiryFoundBody(String date) => _ro
+      ? 'Am găsit o dată de valabilitate ITP: $date. O salvez ca document ITP pentru această mașină?'
+      : 'Found an ITP expiry date: $date. Save it as an ITP document for this car?';
+  static String get itpExpiryApplied =>
+      _ro ? 'Documentul ITP a fost actualizat.' : 'The ITP document was updated.';
 
   // ---------- Add/Edit service record screen ----------
   static String get editServiceRecord => _ro ? 'Editează revizia' : 'Edit service record';
@@ -290,6 +297,8 @@ class S {
   static String get attachPdf => _ro ? 'Atașează PDF' : 'Attach PDF';
   static String get scanDataFromPdf =>
       _ro ? 'Scanează date din PDF' : 'Scan data from PDF';
+  static String get scanFromCamera => _ro ? 'Scanează (Cameră)' : 'Scan (Camera)';
+  static String get scanFromGallery => _ro ? 'Scanează (Galerie)' : 'Scan (Gallery)';
   static String get pdfAttachedLabel => _ro ? 'PDF atașat' : 'PDF attached';
   static String get openPdf => _ro ? 'Deschide PDF' : 'Open PDF';
   static String get openPdfFailed =>

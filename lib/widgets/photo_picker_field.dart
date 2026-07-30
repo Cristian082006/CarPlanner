@@ -20,15 +20,17 @@ class PhotoPickerField extends StatefulWidget {
   final ValueChanged<String?> onChanged;
   final bool allowPdf;
 
-  /// Dacă apelantul chiar rulează OCR pe PDF-ul ales (vezi
-  /// `DocumentScannerService.scanRcaPdf`, apelat doar pentru RCA/CASCO din
-  /// `add_edit_document_screen.dart`) — controlează dacă butonul PDF se
-  /// prezintă ca "Scanează date din PDF" (roșu, sare în ochi) sau ca simplu
-  /// "Atașează PDF" (stil normal). Fără asta, butonul ar promite scanare și
-  /// pentru tipuri de document (ITP, Rovinietă etc.) unde nu se întâmplă
-  /// nimic în afară de atașarea fișierului — un PDF poate fi oricum atașat
-  /// la orice tip de document, doar eticheta/stilul diferă după caz.
-  final bool pdfScansData;
+  /// Dacă apelantul chiar rulează OCR pe fișierul ales — poză SAU PDF (vezi
+  /// `DocumentScannerService.scanRcaImage`/`scanRcaPdf`/`scanRovinietaImage`/
+  /// `scanRovinietaPdf`, apelate doar pentru RCA/Rovinietă din
+  /// `add_edit_document_screen.dart`) — controlează dacă TOATE cele trei
+  /// butoane (Cameră/Galerie/PDF) se prezintă ca acțiuni de "Scanează..."
+  /// (roșu, sare în ochi) sau ca simple butoane de atașare (stil normal).
+  /// Fără asta, butoanele ar promite scanare și pentru tipuri de document
+  /// (ITP, CASCO etc.) unde nu se întâmplă nimic în afară de atașarea
+  /// fișierului — orice fișier poate fi oricum atașat la orice tip de
+  /// document, doar eticheta/stilul diferă după caz.
+  final bool scansData;
 
   const PhotoPickerField({
     super.key,
@@ -36,7 +38,7 @@ class PhotoPickerField extends StatefulWidget {
     required this.onChanged,
     this.label,
     this.allowPdf = false,
-    this.pdfScansData = false,
+    this.scansData = false,
   });
 
   @override
@@ -139,35 +141,72 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              OutlinedButton.icon(
+              _AttachButton(
+                scans: widget.scansData,
+                icon: Icons.camera_alt_outlined,
+                plainLabel: S.camera,
+                scanLabel: S.scanFromCamera,
                 onPressed: () => _pick(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt_outlined),
-                label: Text(S.camera),
               ),
-              OutlinedButton.icon(
+              _AttachButton(
+                scans: widget.scansData,
+                icon: Icons.photo_library_outlined,
+                plainLabel: S.gallery,
+                scanLabel: S.scanFromGallery,
                 onPressed: () => _pick(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library_outlined),
-                label: Text(S.gallery),
               ),
               if (widget.allowPdf)
-                widget.pdfScansData
-                    ? FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: kAttentionColor,
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: _pickPdf,
-                        icon: const Icon(Icons.picture_as_pdf_outlined),
-                        label: Text(S.scanDataFromPdf),
-                      )
-                    : OutlinedButton.icon(
-                        onPressed: _pickPdf,
-                        icon: const Icon(Icons.picture_as_pdf_outlined),
-                        label: Text(S.attachPdf),
-                      ),
+                _AttachButton(
+                  scans: widget.scansData,
+                  icon: Icons.picture_as_pdf_outlined,
+                  plainLabel: S.attachPdf,
+                  scanLabel: S.scanDataFromPdf,
+                  onPressed: _pickPdf,
+                ),
             ],
           ),
       ],
+    );
+  }
+}
+
+/// Buton unic pentru Cameră/Galerie/PDF — stilul (roșu, "Scanează...") e
+/// identic pe toate trei atunci când [scans] e adevărat, ca utilizatorul să
+/// înțeleagă că oricare din cele trei surse declanșează extragerea automată
+/// de date (nu doar PDF-ul, ca înainte). Cu [scans] fals, toate rămân simple
+/// butoane de atașare.
+class _AttachButton extends StatelessWidget {
+  final bool scans;
+  final IconData icon;
+  final String plainLabel;
+  final String scanLabel;
+  final VoidCallback onPressed;
+
+  const _AttachButton({
+    required this.scans,
+    required this.icon,
+    required this.plainLabel,
+    required this.scanLabel,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!scans) {
+      return OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(plainLabel),
+      );
+    }
+    return FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: kAttentionColor,
+        foregroundColor: Colors.white,
+      ),
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: Text(scanLabel),
     );
   }
 }

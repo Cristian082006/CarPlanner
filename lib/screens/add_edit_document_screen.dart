@@ -45,17 +45,24 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
   bool get _isForVehicle => widget.vehicleId != null;
   bool get _isPolicyType => _type == DocumentType.rca || _type == DocumentType.casco;
 
-  /// Extragerea automată de date din PDF (`DocumentScannerService.
-  /// scanRcaPdf`/`parseRcaText`) a fost reglată și testată DOAR pe polițe
-  /// RCA reale (vezi comentariul din CLAUDE.md, punctul 14) — formatul
-  /// standardizat A.S.F. ("Seria RO/32/..." etc.) e specific RCA-ului, care
-  /// e singurul tip de asigurare auto reglementat identic la toți
-  /// asigurătorii; CASCO variază mult mai mult de la un asigurător la altul
-  /// și nu a fost testat pe niciun document real. Deci butonul PDF se
-  /// comportă ca "scanare" (etichetă + stil roșu) DOAR pentru RCA — pentru
-  /// CASCO rămâne un simplu atașament PDF, ca la ITP/Rovinietă, până se
-  /// verifică/reglează parsarea pe o poliță CASCO reală.
-  bool get _pdfScansData => _type == DocumentType.rca;
+  /// Extragerea automată de date (`DocumentScannerService.scanRcaPdf`/
+  /// `scanRcaImage`/`parseRcaText` pentru RCA/CASCO, `scanRovinietaPdf`/
+  /// `scanRovinietaImage`/`parseRovinietaText` pentru Rovinietă) a fost
+  /// reglată pe documente reale doar pentru RCA/Rovinietă (formatul
+  /// standardizat A.S.F. "Seria RO/32/..." etc. pentru RCA, formatul unic
+  /// CNAIR pentru Rovinietă — vezi comentariul din CLAUDE.md, punctul 14).
+  /// **CASCO a fost activat la cererea explicită a utilizatorului, testat
+  /// doar pe un document fictiv/sintetic** (vezi `parseRcaText` — grupul de
+  /// teste "parseRcaText (CASCO, document fictiv)" din
+  /// `document_scanner_service_test.dart`), NU pe o poliță CASCO reală —
+  /// folosește deliberat aceeași parsare ca RCA (provider/număr poliță/
+  /// date), care se bazează mult pe fallback-uri generice (etichetă
+  /// "de la"/"până la", poziție relativă) tocmai fiindcă CASCO nu are un
+  /// format unic impus ca RCA. Încredere mai mică decât la RCA/Rovinietă —
+  /// dacă apar extrageri greșite pe polițe CASCO reale, reglează
+  /// `parseRcaText` cu un exemplu real, la fel cum s-a procedat pentru RCA.
+  bool get _scansData =>
+      _type == DocumentType.rca || _type == DocumentType.rovinieta || _type == DocumentType.casco;
 
   List<DocumentType> get _availableTypes => _isForVehicle
       ? [DocumentType.rca, DocumentType.casco, DocumentType.rovinieta, DocumentType.itp, DocumentType.other]
@@ -134,12 +141,42 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
     });
   }
 
+  /// Rulează OCR pe [path] (poză sau PDF, oricare din cele două scanate azi —
+  /// vezi [_scansData]) și completează câmpurile potrivite tipului curent
+  /// de document. Numele a rămas "FromPdf" din motive istorice (funcția
+  /// scana doar PDF-uri) — acoperă acum ambele surse, distincția se face
+  /// intern după extensia fișierului.
   Future<void> _tryAutoFillFromPdf(String path) async {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(S.extractingPdfData), duration: const Duration(seconds: 2)),
     );
 
-    final data = await DocumentScannerService.instance.scanRcaPdf(path);
+    final isPdf = path.toLowerCase().endsWith('.pdf');
+
+    if (_type == DocumentType.rovinieta) {
+      final data = isPdf
+          ? await DocumentScannerService.instance.scanRovinietaPdf(path)
+          : await DocumentScannerService.instance.scanRovinietaImage(path);
+      if (!mounted || data == null) return;
+      setState(() {
+        if (_startDate == null && data.startDate != null) _startDate = data.startDate;
+        if (!_expiryDateTouched && data.expiryDate != null) {
+          _expiryDate = data.expiryDate!;
+          _expiryDateTouched = true;
+        }
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(data.fieldsFound > 0 ? S.pdfDataFilled(data.fieldsFound) : S.pdfDataNotFound),
+        ),
+      );
+      return;
+    }
+
+    final data = isPdf
+        ? await DocumentScannerService.instance.scanRcaPdf(path)
+        : await DocumentScannerService.instance.scanRcaImage(path);
     if (!mounted || data == null) return;
 
     if (_providerCtrl.text.trim().isEmpty && data.provider != null) {
@@ -256,10 +293,10 @@ class _AddEditDocumentScreenState extends State<AddEditDocumentScreen> {
               initialPath: _photoPath,
               label: _isPolicyType ? S.documentPhotoOrPdf : S.documentPhoto,
               allowPdf: true,
-              pdfScansData: _pdfScansData,
+              scansData: _scansData,
               onChanged: (path) {
                 _photoPath = path;
-                if (path != null && path.toLowerCase().endsWith('.pdf') && _pdfScansData) {
+                if (path != null && _scansData) {
                   _tryAutoFillFromPdf(path);
                 }
               },

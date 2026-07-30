@@ -16,6 +16,7 @@ class ScannedVehicleData {
   final String? engineCode;
   final int? year;
   final int? powerCp;
+  final DateTime? itpExpiryDate;
   final String rawText;
 
   ScannedVehicleData({
@@ -26,11 +27,14 @@ class ScannedVehicleData {
     this.engineCode,
     this.year,
     this.powerCp,
+    this.itpExpiryDate,
     required this.rawText,
   });
 
   int get fieldsFound =>
-      [make, model, vin, plateNumber, engineCode, year, powerCp].where((v) => v != null).length;
+      [make, model, vin, plateNumber, engineCode, year, powerCp, itpExpiryDate]
+          .where((v) => v != null)
+          .length;
 }
 
 /// Date extrase din prima pagină a unui PDF de poliță RCA/CASCO. La fel ca
@@ -54,6 +58,28 @@ class ScannedRcaData {
 
   int get fieldsFound =>
       [provider, policyNumber, startDate, expiryDate].where((v) => v != null).length;
+}
+
+/// Date extrase dintr-o poză/PDF a unei confirmări/chitanțe de Rovinietă
+/// (CNAIR/rovinieta.ro). La fel ca [ScannedRcaData], orice câmp poate
+/// lipsi — formatul variază (confirmare email vs. chitanță tipărită),
+/// extracția e best-effort; utilizatorul revede și corectează întotdeauna
+/// înainte de salvare.
+class ScannedRovinietaData {
+  final String? plateNumber;
+  final DateTime? startDate;
+  final DateTime? expiryDate;
+  final String rawText;
+
+  ScannedRovinietaData({
+    this.plateNumber,
+    this.startDate,
+    this.expiryDate,
+    required this.rawText,
+  });
+
+  int get fieldsFound =>
+      [plateNumber, startDate, expiryDate].where((v) => v != null).length;
 }
 
 /// O linie de text recunoscută de ML Kit, cu poziția ei geometrică pe
@@ -261,6 +287,27 @@ class DocumentScannerService {
     caseSensitive: false,
   );
 
+  /// Caseta de control tehnic (ITP), tipărită de RAR în colțul din
+  /// dreapta-sus al feței principale a talonului — nu e un câmp
+  /// standardizat UE (spre deosebire de D.3/E/B/P.2 de mai sus), deci
+  /// extragerea e best-effort, ancorată pe cuvinte-cheie generice
+  /// ("ITP", "control tehnic", "inspecții tehnice periodice"). Caseta poate
+  /// conține mai multe ștampile succesive (inspecții anterioare + cea
+  /// curentă) — luăm cea mai târzie dată găsită în apropierea
+  /// cuvântului-cheie, nu prima, fiindcă data de valabilitate curentă e
+  /// mereu cea mai mare.
+  ///
+  /// Bug real confirmat de utilizator pe talonul lui real: eticheta exactă e
+  /// "Inspecții tehnice periodice" (plural, feminin — "tehnice", nu
+  /// "tehnică"/"tehnica") — varianta inițială a regex-ului cerea explicit
+  /// terminația de singular `tehnic[aă]`, deci nu se potrivea niciodată pe
+  /// un talon real, doar pe presupunerea inițială netestată. `tehnic\w*`
+  /// acoperă orice terminație (tehnică/tehnica/tehnice/tehnic).
+  static final RegExp _itpKeyword = RegExp(
+    r'\bI\.?\s*T\.?\s*P\.?\b|control\s*tehnic|inspec[țt]i[ei]\s*tehnic\w*',
+    caseSensitive: false,
+  );
+
   /// Fotografiază → recunoaște textul → extrage câmpurile. Aruncă orice
   /// eroare a ML Kit mai departe către apelant.
   Future<ScannedVehicleData> scanTalon(String imagePath) async {
@@ -430,6 +477,27 @@ class DocumentScannerService {
       break;
     }
 
+    // Data de expirare ITP — vezi comentariul de la [_itpKeyword]. Căutăm
+    // toate datele dintr-o fereastră de text în jurul cuvântului-cheie (nu
+    // doar pe rândul curent, fiindcă OCR-ul poate rupe caseta de ștampile în
+    // mai multe rânduri/blocuri) și păstrăm cea mai târzie.
+    DateTime? itpExpiryDate;
+    final itpKeywordMatch = _itpKeyword.firstMatch(rawText);
+    if (itpKeywordMatch != null) {
+      final windowEnd =
+          (itpKeywordMatch.end + 300 > rawText.length) ? rawText.length : itpKeywordMatch.end + 300;
+      final window = rawText.substring(itpKeywordMatch.start, windowEnd);
+      final itpDates = _datePattern
+          .allMatches(window)
+          .map((m) => _parseDate(m.group(0)!))
+          .whereType<DateTime>()
+          .toList();
+      if (itpDates.isNotEmpty) {
+        itpDates.sort();
+        itpExpiryDate = itpDates.last;
+      }
+    }
+
     return ScannedVehicleData(
       make: make,
       model: model,
@@ -438,6 +506,7 @@ class DocumentScannerService {
       engineCode: engineCode,
       year: year,
       powerCp: powerCp,
+      itpExpiryDate: itpExpiryDate,
       rawText: rawText,
     );
   }
@@ -580,6 +649,28 @@ class DocumentScannerService {
       }
     }
 
+    final dates = _extractValidityDates(rawText, lines);
+
+    return ScannedRcaData(
+      provider: provider,
+      policyNumber: policyNumber,
+      startDate: dates.startDate,
+      expiryDate: dates.expiryDate,
+      rawText: rawText,
+    );
+  }
+
+  /// Extrage data de început/expirare a valabilității unui document —
+  /// extras din [parseRcaText] ca să poată fi reutilizat și de
+  /// [parseRovinietaText] (Rovinieta CNAIR folosește aceleași etichete
+  /// generice "de la"/"până la" ca fraza standard RCA, plus aceleași
+  /// fallback-uri când etichetele n-au fost recunoscute de OCR). Vezi
+  /// comentariile de la [_startDateLabel]/[_expiryDateLabel]/
+  /// [_greenCardDatesPattern] pentru detalii pe fiecare strategie.
+  ({DateTime? startDate, DateTime? expiryDate}) _extractValidityDates(
+    String rawText,
+    List<String> lines,
+  ) {
     DateTime? startDate;
     DateTime? expiryDate;
     int? expiryLineIndex;
@@ -652,23 +743,85 @@ class DocumentScannerService {
       }
     }
 
-    return ScannedRcaData(
-      provider: provider,
-      policyNumber: policyNumber,
-      startDate: startDate,
-      expiryDate: expiryDate,
+    return (startDate: startDate, expiryDate: expiryDate);
+  }
+
+  /// Funcție pură de parsare a textului recunoscut de pe o confirmare/chitanță
+  /// de Rovinietă (CNAIR/rovinieta.ro) — separată de OCR ca să poată fi
+  /// testată cu text simulat, la fel ca [parseRcaText]. Best-effort: formatul
+  /// variază (confirmare pe email vs. chitanță tipărită la punct de vânzare),
+  /// deci extragem doar ce e suficient de generic — numărul de înmatriculare
+  /// (aceeași expresie regulată ca la talon) și datele de valabilitate
+  /// (aceleași etichete generice "de la"/"până la" ca la RCA, vezi
+  /// [_extractValidityDates]).
+  ScannedRovinietaData parseRovinietaText(String rawText) {
+    final lines = rawText.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+
+    final plateMatch = _platePattern.firstMatch(rawText.toUpperCase());
+    final plateNumber = plateMatch != null
+        ? '${plateMatch.group(1)}${plateMatch.group(2)}${plateMatch.group(3)}'
+        : null;
+
+    final dates = _extractValidityDates(rawText, lines);
+
+    return ScannedRovinietaData(
+      plateNumber: plateNumber,
+      startDate: dates.startDate,
+      expiryDate: dates.expiryDate,
       rawText: rawText,
     );
   }
 
+  /// Recunoaște text simplu (fără reconstrucția pe poziții folosită la
+  /// talon — RCA/Rovinieta sunt text de tip paragraf/listă de câmpuri, nu un
+  /// tabel etichetă/valoare pe două coloane, deci ordinea brută întoarsă de
+  /// ML Kit e suficientă) dintr-o poză. Aruncă orice eroare mai departe către
+  /// apelant (tratată de acesta ca `null`, la fel ca la scanarea din PDF).
+  Future<String> _recognizeTextFromImage(String imagePath) async {
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      final inputImage = InputImage.fromFilePath(imagePath);
+      final result = await recognizer.processImage(inputImage);
+      return result.text;
+    } finally {
+      await recognizer.close();
+    }
+  }
+
+  /// Scanează o poză (cameră/galerie) a unei polițe RCA/CASCO — la fel ca
+  /// [scanRcaPdf], dar fără randarea de PDF (poza e deja o imagine). Best-
+  /// effort: orice eroare întoarce `null`, atașarea pozei rămâne validă
+  /// indiferent de rezultatul extracției.
+  Future<ScannedRcaData?> scanRcaImage(String imagePath) async {
+    try {
+      final text = await _recognizeTextFromImage(imagePath);
+      return parseRcaText(text);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Scanează o poză a unei confirmări/chitanțe de Rovinietă. Best-effort, la
+  /// fel ca [scanRcaImage].
+  Future<ScannedRovinietaData?> scanRovinietaImage(String imagePath) async {
+    try {
+      final text = await _recognizeTextFromImage(imagePath);
+      return parseRovinietaText(text);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Randează prima pagină a PDF-ului ca imagine și rulează același OCR
-  /// folosit pentru talon. Doar pagina 0 e citită — polițele RCA/CASCO pun
-  /// asigurătorul, seria poliței și valabilitatea pe prima pagină, deci e un
-  /// compromis rezonabil, nu o limitare care blochează funcționalitatea.
-  /// Best-effort: orice eroare (PDF corupt, randare eșuată, OCR indisponibil)
-  /// întoarce `null` în loc să propage excepția — atașarea PDF-ului rămâne
-  /// validă indiferent de rezultatul extracției.
-  Future<ScannedRcaData?> scanRcaPdf(String pdfPath) async {
+  /// folosit pentru talon — extras separat de [parseRcaText]/
+  /// [parseRovinietaText] ca ambele să poată reutiliza aceeași randare PDF→
+  /// imagine→text. Doar pagina 0 e citită — polițele RCA/CASCO și
+  /// confirmările de Rovinietă pun toate datele relevante pe prima pagină,
+  /// deci e un compromis rezonabil, nu o limitare care blochează
+  /// funcționalitatea. Best-effort: orice eroare (PDF corupt, randare
+  /// eșuată, OCR indisponibil) întoarce `null` în loc să propage excepția —
+  /// atașarea PDF-ului rămâne validă indiferent de rezultatul extracției.
+  Future<String?> _recognizeTextFromPdfFirstPage(String pdfPath) async {
     try {
       final bytes = await File(pdfPath).readAsBytes();
       final page = await Printing.raster(bytes, pages: const [0], dpi: 150).first;
@@ -698,7 +851,7 @@ class DocumentScannerService {
       try {
         final inputImage = InputImage.fromFilePath(tmpPath);
         final result = await recognizer.processImage(inputImage);
-        return parseRcaText(result.text);
+        return result.text;
       } finally {
         await recognizer.close();
         if (await tmpFile.exists()) await tmpFile.delete();
@@ -706,5 +859,21 @@ class DocumentScannerService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Scanează prima pagină a unui PDF de poliță RCA/CASCO. Best-effort:
+  /// vezi comentariul de la [_recognizeTextFromPdfFirstPage].
+  Future<ScannedRcaData?> scanRcaPdf(String pdfPath) async {
+    final text = await _recognizeTextFromPdfFirstPage(pdfPath);
+    if (text == null) return null;
+    return parseRcaText(text);
+  }
+
+  /// Scanează prima pagină a unui PDF de confirmare/chitanță de Rovinietă.
+  /// Best-effort: vezi comentariul de la [_recognizeTextFromPdfFirstPage].
+  Future<ScannedRovinietaData?> scanRovinietaPdf(String pdfPath) async {
+    final text = await _recognizeTextFromPdfFirstPage(pdfPath);
+    if (text == null) return null;
+    return parseRovinietaText(text);
   }
 }

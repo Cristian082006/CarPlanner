@@ -4,10 +4,13 @@ import 'package:uuid/uuid.dart';
 
 import '../db/database_helper.dart';
 import '../l10n/strings.dart';
+import '../models/car_document.dart';
 import '../models/vehicle.dart';
 import '../services/document_scanner_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/constants.dart';
+import '../utils/date_utils.dart';
 import '../utils/engine_lookup.dart';
 import '../utils/vin_decoder.dart';
 import '../widgets/engine_candidates_dialog.dart';
@@ -38,6 +41,7 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
   String? _photoPath;
   bool _saving = false;
   bool _scanning = false;
+  DateTime? _pendingItpExpiry;
 
   bool get _isEditing => widget.vehicle != null;
 
@@ -113,6 +117,21 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
           data.fieldsFound > 0 ? S.scanFilledFields(data.fieldsFound) : S.scanNoData,
         ),
       ));
+
+      if (data.itpExpiryDate != null) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(S.itpExpiryFoundTitle),
+            content: Text(S.itpExpiryFoundBody(formatDate(data.itpExpiryDate))),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(S.cancel)),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(S.save)),
+            ],
+          ),
+        );
+        if (confirmed == true) _pendingItpExpiry = data.itpExpiryDate;
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -197,6 +216,30 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
     final extraIds = await _db.getExtraComponentIds(vehicle.id);
     await NotificationService.instance.checkComponentStatuses(vehicle, records, extraIds);
     await NotificationService.instance.scheduleMileageReminder(vehicle);
+
+    if (_pendingItpExpiry != null) {
+      final existingDocs = await _db.getDocumentsForVehicle(vehicle.id);
+      CarDocument? existingItp;
+      for (final doc in existingDocs) {
+        if (doc.type == DocumentType.itp) {
+          existingItp = doc;
+          break;
+        }
+      }
+      final itpDocument = existingItp?.copyWith(expiryDate: _pendingItpExpiry) ??
+          CarDocument(
+            id: const Uuid().v4(),
+            vehicleId: vehicle.id,
+            type: DocumentType.itp,
+            expiryDate: _pendingItpExpiry!,
+          );
+      if (existingItp != null) {
+        await _db.updateDocument(itpDocument);
+      } else {
+        await _db.insertDocument(itpDocument);
+      }
+      await NotificationService.instance.scheduleDocumentReminders(itpDocument, vehicle.name);
+    }
 
     if (!mounted) return;
     Navigator.pop(context);

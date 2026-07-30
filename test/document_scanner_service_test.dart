@@ -89,6 +89,55 @@ P.2)
     expect(result.powerCp, 120);
   });
 
+  test('extracts ITP expiry date from the control tehnic stamp box, keyword "ITP"', () {
+    final result = scanner.parseTalonText('''
+CERTIFICAT DE INMATRICULARE
+CONTROL TEHNIC ITP
+10.05.2024
+VALABIL PANA LA 10.05.2026
+D.1) DACIA
+''');
+
+    expect(result.itpExpiryDate, DateTime(2026, 5, 10));
+  });
+
+  test('picks the latest date near the keyword when multiple ITP stamps are present', () {
+    final result = scanner.parseTalonText('''
+Inspectie tehnica periodica
+12.01.2020
+15.02.2022
+20.03.2024
+''');
+
+    expect(result.itpExpiryDate, DateTime(2024, 3, 20));
+  });
+
+  test('does not confuse a distant date with the ITP expiry (outside the keyword window)', () {
+    final result = scanner.parseTalonText('B) 15.03.2016');
+
+    expect(result.itpExpiryDate, isNull);
+  });
+
+  test('recognizes the real label "Inspectii tehnice periodice" (plural, not "tehnica")', () {
+    // Regresie: talonul real al utilizatorului are eticheta la plural
+    // feminin ("tehnice"), nu la singular ("tehnică"/"tehnica") — varianta
+    // inițială a regex-ului cerea explicit terminația de singular și nu se
+    // potrivea niciodată pe acest text real.
+    final result = scanner.parseTalonText('''
+Inspectii tehnice periodice
+10.05.2026
+''');
+
+    expect(result.itpExpiryDate, DateTime(2026, 5, 10));
+  });
+
+  test('itpExpiryDate counts towards fieldsFound', () {
+    final result = scanner.parseTalonText('control tehnic 10.05.2026');
+
+    expect(result.itpExpiryDate, DateTime(2026, 5, 10));
+    expect(result.fieldsFound, 1);
+  });
+
   group('reconstructRowsByPosition (real two-column talon layout)', () {
     // Reprodus pe o poză reală de talon (Hyundai Tucson) trimisă de
     // utilizator: ML Kit a grupat coloana îngustă de etichete (A, D.1, D.2,
@@ -472,6 +521,96 @@ INTERAMERICAN HELLENIC INSURANCE COMPANY S.A. ATENA - SUCURSALA BUCUREŞTI     T
 
       expect(result.provider, isNull);
       expect(result.policyNumber, isNull);
+      expect(result.startDate, isNull);
+      expect(result.expiryDate, isNull);
+      expect(result.fieldsFound, 0);
+    });
+  });
+
+  group('parseRcaText (CASCO, document fictiv)', () {
+    // CASCO reutilizează parseRcaText (vezi comentariul din
+    // add_edit_document_screen.dart, _scansData) — dar spre deosebire de
+    // RCA, nu există un exemplu real de poliță CASCO disponibil, deci acest
+    // text e FICTIV/sintetic, scris ca să semene plauzibil cu o poliță
+    // CASCO reală (fără formatul standardizat A.S.F. al RCA-ului — CASCO nu
+    // e reglementat identic la toți asigurătorii), ca să verifice că
+    // fallback-urile generice (etichetă provider, "de la"/"până la", serie
+    // și număr) se aplică rezonabil și aici. Dacă un utilizator raportează
+    // o extragere greșită pe o poliță CASCO reală, înlocuiește acest test
+    // cu textul real, la fel cum s-a procedat pentru RCA.
+    const fictionalCascoText = '''
+POLIȚĂ DE ASIGURARE CASCO
+DENUMIRE ASIGURĂTOR: Groupama Asigurări SA
+Serie și număr: CASCO-2026-004521
+Valabilitate de la 01/08/2026 până la 31/07/2027
+''';
+
+    test('extracts provider, policy number and validity dates from a fictional CASCO policy', () {
+      final result = scanner.parseRcaText(fictionalCascoText);
+
+      expect(result.provider, 'Groupama');
+      expect(result.policyNumber, 'CASCO-2026-004521');
+      expect(result.startDate, DateTime(2026, 8, 1));
+      expect(result.expiryDate, DateTime(2027, 7, 31));
+    });
+
+    test('falls back to the positional/label provider extraction for an unlisted CASCO insurer', () {
+      final result = scanner.parseRcaText('''
+POLIȚĂ DE ASIGURARE CASCO
+DENUMIRE ASIGURĂTOR: Fictional Insurance Co SRL
+Serie și număr: CASCO-2026-999999
+Valabilitate de la 15/09/2026 până la 14/09/2027
+''');
+
+      expect(result.provider, 'Fictional Insurance Co SRL');
+      expect(result.policyNumber, 'CASCO-2026-999999');
+      expect(result.startDate, DateTime(2026, 9, 15));
+      expect(result.expiryDate, DateTime(2027, 9, 14));
+    });
+  });
+
+  group('parseRovinietaText', () {
+    test('extracts plate number and validity dates from a typical rovinieta confirmation', () {
+      final result = scanner.parseRovinietaText('''
+Confirmare achizitie rovinieta
+Numar de inmatriculare: B123ABC
+Valabilitate de la 10/05/2026 până la 09/06/2026
+''');
+
+      expect(result.plateNumber, 'B123ABC');
+      expect(result.startDate, DateTime(2026, 5, 10));
+      expect(result.expiryDate, DateTime(2026, 6, 9));
+    });
+
+    test('extracts data from a fictional CNAIR-style e-rovinieta confirmation email', () {
+      // Document fictiv/sintetic (nu de la un utilizator real) — testează
+      // un format de confirmare plauzibil pentru un e-mail CNAIR/
+      // rovinieta.ro, diferit de textul de mai sus (fără eticheta explicită
+      // "de la", ca la a doua poliță RCA reală din grupul parseRcaText).
+      final result = scanner.parseRovinietaText('''
+Stimate client,
+Va confirmam achizitionarea rovinietei pentru vehiculul cu numarul B99FIC.
+Rovinieta este valabila 20/10/2026 până la 19/11/2026.
+Va multumim.
+''');
+
+      expect(result.plateNumber, 'B99FIC');
+      expect(result.startDate, DateTime(2026, 10, 20));
+      expect(result.expiryDate, DateTime(2026, 11, 19));
+    });
+
+    test('falls back to the two-dates heuristic when no label is recognized', () {
+      final result = scanner.parseRovinietaText('B 45 XYZ 10.05.2026 09.06.2026');
+
+      expect(result.plateNumber, 'B45XYZ');
+      expect(result.startDate, DateTime(2026, 5, 10));
+      expect(result.expiryDate, DateTime(2026, 6, 9));
+    });
+
+    test('falls back gracefully on unrelated text', () {
+      final result = scanner.parseRovinietaText('random unrelated text with no toll data');
+
+      expect(result.plateNumber, isNull);
       expect(result.startDate, isNull);
       expect(result.expiryDate, isNull);
       expect(result.fieldsFound, 0);

@@ -571,6 +571,17 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   vehicul înainte de a continua. Apoi: cod motor (`getEngineForCode` găsește rândul din `motoare`
   după `cod_motor_key` normalizat → `getMaintenanceIntervalsForMotorId` citește din view-ul
   `mentenanta_completa`, care combină regulile specifice cu cele generice) → dacă nu are rânduri,
+  **`getEngineForCode` mai încearcă și o potrivire pe `denumire_comerciala`** (ex. "420d") dacă
+  `cod_motor_key` nu a găsit nimic ȘI `make` e completat (bug real raportat de utilizator: BMW
+  420d nu primea intervalul specific — cauza era că userul completase câmpul „Cod motor” cu
+  denumirea comercială „420d”, nu cu codul intern real N47D20/B47D20, iar `getEngineForCode`
+  potrivea STRICT pe `cod_motor_key`; catalogul în sine avea deja regula specifică BMW diesel din
+  v25, 29000 km/24 luni, verificat corect pe toate cele 26 de motoare diesel — problema era doar
+  în lookup, nu în date). Restrâns obligatoriu la `make` (nu doar `model`, care lipsește des din
+  acest flux) ca să evite coliziuni cu denumiri comerciale generice de la alte mărci (ex. cifre de
+  capacitate/putere repetate pe mai multe mărci) — la fel ca precedentul deja existent din
+  `getCandidateEnginesForVin` (potrivire pe `denumire_comerciala` pentru câmpul model, de la
+  fix-ul „Completare motorizare!”/BMW 420d anterior). Dacă nu are rânduri nici așa,
   fallback pe model/marcă din `maintenance_profiles.dart` (`resolveMaintenanceProfile(make, model,
   year)`) → mașină veche (an < 2000) → nimic. Un motor poate avea **multe rânduri** (ulei, filtre,
   distribuție, curea accesorii, lichide, plăcuțe/discuri frână, bujii, ulei cutie, baterie...),

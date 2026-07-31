@@ -866,8 +866,16 @@ class DatabaseHelper {
   /// Polo care primea intervalele unui Seat Ibiza. Cu [make]/[model]
   /// completate, preferăm întâi un rând cu marcă+model exacte, apoi doar
   /// marcă, și abia dacă niciunul nu se potrivește cădem pe primul rând
-  /// găsit (păstrează comportamentul vechi ca ultim fallback). `null` dacă
-  /// [engineCode] nu are nicio potrivire în catalog.
+  /// găsit (păstrează comportamentul vechi ca ultim fallback). Dacă niciun
+  /// `cod_motor` nu se potrivește dar [make] e completat, mai încercăm o
+  /// potrivire pe `denumire_comerciala` (ex. "420d") normalizată la fel ca un
+  /// cod de motor — utilizatorii completează des câmpul „Cod motor” cu
+  /// denumirea comercială a motorizării (vezi și potrivirea similară din
+  /// `getCandidateEnginesForVin` pentru câmpul model), nu cu codul intern
+  /// real, care de multe ori nici nu apare pe talon. Restrânsă la [make]
+  /// obligatoriu (altfel riscă coliziuni cu denumiri comerciale generice de
+  /// la alte mărci, ex. cifre de capacitate). `null` dacă [engineCode] nu are
+  /// nicio potrivire în catalog.
   Future<Map<String, Object?>?> getEngineForCode(
     String? engineCode, {
     String? make,
@@ -877,7 +885,7 @@ class DatabaseHelper {
     final key = normalizeEngineCode(engineCode);
     if (key.isEmpty) return null;
     final db = await database;
-    final rows = await db.rawQuery('''
+    var rows = await db.rawQuery('''
       SELECT mt.*, mo.nume AS model_nume, mo.generatie AS model_generatie, ma.nume AS marca_nume
       FROM motoare mt
       JOIN modele mo ON mo.id = mt.model_id
@@ -885,6 +893,17 @@ class DatabaseHelper {
       WHERE mt.cod_motor_key = ?
       ORDER BY mt.id
     ''', [key]);
+    if (rows.isEmpty && make != null && make.trim().isNotEmpty) {
+      rows = await db.rawQuery('''
+        SELECT mt.*, mo.nume AS model_nume, mo.generatie AS model_generatie, ma.nume AS marca_nume
+        FROM motoare mt
+        JOIN modele mo ON mo.id = mt.model_id
+        JOIN marci ma ON ma.id = mo.marca_id
+        WHERE LOWER(ma.nume) = ?
+          AND UPPER(REPLACE(REPLACE(REPLACE(TRIM(mt.denumire_comerciala), ' ', ''), '-', ''), '.', '')) = ?
+        ORDER BY mt.id
+      ''', [make.trim().toLowerCase(), key]);
+    }
     if (rows.isEmpty) return null;
     if (rows.length == 1) return rows.first;
 

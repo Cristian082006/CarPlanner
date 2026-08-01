@@ -49,9 +49,14 @@ class S {
       : 'No home documents added yet.';
   static String get seeAll => _ro ? 'Vezi toate' : 'See all';
   static String get houseHeader => _ro ? 'Casă' : 'House';
-  static String get addHomeInsurance => _ro
-      ? 'Adaugă asigurare, impozit, verificări sau alt document'
-      : 'Add insurance, tax, inspections or other document';
+  // Etichetă scurtă pentru FAB — vechea etichetă lungă ("Adaugă asigurare,
+  // impozit, verificări sau alt document") era greu de citit înghesuită
+  // într-un buton plutitor; textul lung a devenit mesajul de ecran gol
+  // (`houseEmptyState`) în loc de eticheta butonului.
+  static String get addHomeDocumentShort => _ro ? 'Document nou' : 'New document';
+  static String get houseEmptyState => _ro
+      ? 'Niciun document de locuință încă.\nApasă pe + ca să adaugi asigurare, impozit, verificări sau alt document.'
+      : "No home documents yet.\nTap + to add insurance, tax, inspections or other document.";
   static String get homeLabel => _ro ? 'Locuință' : 'Home';
 
   // ---------- Vehicle detail screen ----------

@@ -526,6 +526,15 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   `IndexedStack`, deci FAB-urile de pe ecrane diferite pot coexista în arbore în același timp;
   fiecare are deja propriul `heroTag` unic, la fel ca `garageFab`/`serviceRecordFab`/
   `vehicleDocumentsFab`).
+  **„Mai user friendly", cerut explicit imediat după:** eticheta lungă a FAB-ului
+  („Adaugă asigurare, impozit, verificări sau alt document") era greu de citit înghesuită
+  într-un buton plutitor. Scurtată la `S.addHomeDocumentShort` („Document nou"), iar textul lung
+  s-a mutat pe un mesaj de ecran gol nou (`S.houseEmptyState`) — înainte, cu zero documente,
+  ecranul nu arăta ABSOLUT NIMIC în afară de FAB (spre deosebire de toate celelalte ecrane goale
+  din aplicație — `noCarsYet`, `noHouseWarnings`... — care au mereu un mesaj explicativ). FAB-ul
+  are acum și `backgroundColor: kNavHouseColor` (verde, aceeași culoare cu tabul Casă din bara de
+  jos) în loc de `colorScheme.primary` implicit — consistență vizuală cu restul paletei colorate
+  cerute mai devreme pentru navigare.
   **Bara de navigare de jos NU mai e `NavigationBar`-ul din Material** (era înainte, cu elevație
   prin `navigationBarTheme`) — testat pe device real, umbra dată de elevația temei nu se vedea
   vizibil, iar `NavigationDestination` n-are nicio stare de apăsare separată (doar ripple).

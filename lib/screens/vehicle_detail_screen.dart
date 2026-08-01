@@ -13,6 +13,7 @@ import '../utils/engine_lookup.dart';
 import '../utils/maintenance_profiles.dart';
 import '../utils/vehicle_components.dart';
 import '../utils/vin_decoder.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/document_tile.dart';
 import '../widgets/engine_candidates_dialog.dart';
 import '../widgets/service_record_tile.dart';
@@ -104,32 +105,38 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
           ),
         ],
       ),
-      // Aceeași componentă NavigationBar (Material 3, pill de selecție) ca pe
-      // ecranul Acasă (`main_shell.dart`) — cerut explicit de utilizator, ca
-      // taburile mașinii să arate la fel ca navigarea principală.
-      bottomNavigationBar: NavigationBar(
+      // Aceeași componentă AppBottomNavBar (proprie, nu Material
+      // `NavigationBar` — vezi comentariul din `widgets/app_bottom_nav_bar.dart`)
+      // ca pe ecranul Acasă (`main_shell.dart`) — cerut explicit de
+      // utilizator, ca taburile mașinii să arate la fel ca navigarea
+      // principală.
+      bottomNavigationBar: AppBottomNavBar(
         selectedIndex: _currentTabIndex,
         onDestinationSelected: (i) => setState(() => _currentTabIndex = i),
         destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.info_outline),
-            selectedIcon: const Icon(Icons.info),
+          AppNavDestination(
+            icon: Icons.info_outline,
+            selectedIcon: Icons.info,
             label: S.tabInfo,
+            color: kAccentColor,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.build_outlined),
-            selectedIcon: const Icon(Icons.build),
+          AppNavDestination(
+            icon: Icons.build_outlined,
+            selectedIcon: Icons.build,
             label: S.tabService,
+            color: kNavServiceColor,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.description_outlined),
-            selectedIcon: const Icon(Icons.description),
+          AppNavDestination(
+            icon: Icons.description_outlined,
+            selectedIcon: Icons.description,
             label: S.tabDocuments,
+            color: kNavDocumentsColor,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.checklist_outlined),
-            selectedIcon: const Icon(Icons.checklist),
+          AppNavDestination(
+            icon: Icons.checklist_outlined,
+            selectedIcon: Icons.checklist,
             label: S.tabComponents,
+            color: kNavComponentsColor,
           ),
         ],
       ),

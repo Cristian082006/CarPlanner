@@ -138,12 +138,9 @@ class S {
       : 'Found an ITP expiry date: $date. Save it as an ITP document for this car?';
   static String get itpExpiryApplied =>
       _ro ? 'Documentul ITP a fost actualizat.' : 'The ITP document was updated.';
-  static String get itpExpiryNotFoundTitle =>
-      _ro ? 'Data ITP nu a putut fi citită' : 'Could not read the ITP expiry date';
   static String get itpExpiryNotFoundBody => _ro
-      ? 'Nu am găsit o dată de valabilitate ITP pe poză (talon vechi, ștampilă scrisă de mână greu lizibilă etc.). Vrei s-o completezi manual acum?'
-      : "Could not find an ITP expiry date on the photo (older registration, hard-to-read handwritten stamp, etc.). Want to enter it manually now?";
-  static String get itpExpiryEnterManually => _ro ? 'Completează manual' : 'Enter manually';
+      ? 'Nu am găsit o dată de valabilitate ITP pe poză. O poți adăuga separat din Documente.'
+      : "Could not find an ITP expiry date on the photo. You can add it separately from Documents.";
 
   // ---------- Add/Edit service record screen ----------
   static String get editServiceRecord => _ro ? 'Editează revizia' : 'Edit service record';

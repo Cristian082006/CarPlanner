@@ -132,36 +132,16 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
         );
         if (confirmed == true) _pendingItpExpiry = data.itpExpiryDate;
       } else {
-        // Fallback cerut explicit de utilizator: extragerea ITP e
-        // best-effort (talon vechi, ștampilă scrisă de mână greu lizibilă
-        // etc. — vezi `document_scanner_service.dart`) și poate rata chiar
-        // și cu fallback-ul pentru scris de mână deja existent acolo. În loc
-        // să lase tăcut câmpul necompletat, oferim direct completarea
-        // manuală, aici, în același flux — nu doar prin navigarea separată
-        // către ecranul de documente.
-        final wantsManual = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(S.itpExpiryNotFoundTitle),
-            content: Text(S.itpExpiryNotFoundBody),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(S.cancel)),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(S.itpExpiryEnterManually),
-              ),
-            ],
-          ),
+        // Cerut explicit de utilizator: doar un anunț simplu (nu un dialog
+        // blocant cu date picker) — extragerea ITP e best-effort (talon
+        // vechi, ștampilă scrisă de mână greu lizibilă etc. — vezi
+        // `document_scanner_service.dart`) și poate rata chiar și cu
+        // fallback-ul pentru scris de mână deja existent acolo. Utilizatorul
+        // preferă să salveze întâi mașina, apoi să adauge ITP-ul separat din
+        // ecranul de documente — nu vrea să fie oprit din flux aici.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(S.itpExpiryNotFoundBody)),
         );
-        if (wantsManual == true && mounted) {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: DateTime.now(),
-            firstDate: DateTime(2000),
-            lastDate: DateTime(2100),
-          );
-          if (picked != null) _pendingItpExpiry = picked;
-        }
       }
     } catch (_) {
       if (!mounted) return;

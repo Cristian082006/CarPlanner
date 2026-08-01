@@ -123,21 +123,25 @@ class HomeScreenState extends State<HomeScreen> {
                 child: Text(S.allUpToDate, style: const TextStyle(color: Colors.grey)),
               )
             else
-              ...alertsPreview.map((a) => ListTile(
-                    leading: Icon(a.icon, color: a.color),
-                    title: Text(a.title),
-                    subtitle: Text('${a.subtitle} • ${daysUntilLabel(a.daysUntil)}'),
-                    onTap: () async {
-                      if (a.vehicleId != null) {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => VehicleDetailScreen(vehicleId: a.vehicleId!),
-                          ),
-                        );
-                        _load();
-                      }
-                    },
+              // Aspect 3D cerut explicit de utilizator — la fel ca
+              // `VehicleCard`/`DocumentTile`, în loc de `ListTile` plat.
+              ...alertsPreview.map((a) => Card(
+                    child: ListTile(
+                      leading: Icon(a.icon, color: a.color),
+                      title: Text(a.title),
+                      subtitle: Text('${a.subtitle} • ${daysUntilLabel(a.daysUntil)}'),
+                      onTap: () async {
+                        if (a.vehicleId != null) {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => VehicleDetailScreen(vehicleId: a.vehicleId!),
+                            ),
+                          );
+                          _load();
+                        }
+                      },
+                    ),
                   )),
             _SectionHeader(S.myCarsHeader, onSeeAll: () => widget.onSeeAllInTab?.call(1)),
             if (_vehicles.isEmpty)
@@ -206,15 +210,18 @@ class HomeScreenState extends State<HomeScreen> {
                       child: const Icon(Icons.delete, color: Colors.white),
                     ),
                     onDismissed: (_) => _deleteReminder(r),
-                    child: ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.alarm_outlined)),
-                      title: Text(r.title),
-                      subtitle: Text(
-                        [formatDate(r.date), if (r.vehicleId != null) _vehiclesById[r.vehicleId]?.name]
-                            .whereType<String>()
-                            .join(' • '),
+                    child: Card(
+                      child: ListTile(
+                        leading: const CircleAvatar(child: Icon(Icons.alarm_outlined)),
+                        title: Text(r.title),
+                        subtitle: Text(
+                          [
+                            formatDate(r.date),
+                            if (r.vehicleId != null) _vehiclesById[r.vehicleId]?.name,
+                          ].whereType<String>().join(' • '),
+                        ),
+                        onTap: () => _addOrEditReminder(r),
                       ),
-                      onTap: () => _addOrEditReminder(r),
                     ),
                   )),
           ],

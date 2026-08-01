@@ -12,7 +12,41 @@ const Color kAccentColor = Color(0xFF5B5FEF);
 /// semnalul vizual.
 const Color kAttentionColor = Color(0xFFE13B3B);
 
+/// Culori distincte per tab din barele de navigare de jos
+/// (`AppBottomNavBar`) — cerut explicit de utilizator ("fă butoanele de
+/// jos... colorate"), în loc de o singură culoare neutră (`onSurface`)
+/// pentru toate taburile. Tabul Acasă folosește `kAccentColor` (identitatea
+/// vizuală a aplicației); restul au culori tematice legate de conținutul
+/// tabului (mașini=portocaliu, casă=verde, costuri=turcoaz, setări=gri
+/// albăstrui neutru — intenționat mai discret, nu e un tab de conținut).
+const Color kNavGarageColor = Color(0xFFE8871E);
+const Color kNavHouseColor = Color(0xFF2E9E5B);
+const Color kNavCostsColor = Color(0xFF0EA5A5);
+const Color kNavSettingsColor = Color(0xFF64748B);
+
+/// Aceleași culori tematice, refolosite pentru taburile din
+/// `vehicle_detail_screen.dart` (Info/Service/Documente/Componente) —
+/// Info reia `kAccentColor` la fel ca tabul Acasă, Service/Documente/
+/// Componente au propriile culori, distincte de cele de mai sus (nu se
+/// suprapun pe același ecran, deci nu contează consistența 1:1 cu taburile
+/// principale).
+const Color kNavServiceColor = Color(0xFFE8871E);
+const Color kNavDocumentsColor = Color(0xFF0EA5A5);
+const Color kNavComponentsColor = Color(0xFF2E9E5B);
+
 const String _fontFamily = 'Plus Jakarta Sans';
+
+/// Elevație care variază cu starea butonului — cerut explicit de utilizator
+/// ("să arate ca și cum le apas, atunci când le apas"): butonul "plutește"
+/// implicit (elevație mai mare) și "se lasă în jos" vizual când e apăsat
+/// (elevație aproape 0) — efectul de adâncime 3D clasic Material, dincolo
+/// de simplul feedback de culoare/ripple pe care Flutter îl dă oricum.
+WidgetStateProperty<double> get _pressedElevation => WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) return 0;
+      if (states.contains(WidgetState.pressed)) return 1;
+      if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) return 6;
+      return 4;
+    });
 
 const Color _lightBackground = Color(0xFFFAFAFC);
 const Color _darkBackground = Color(0xFF17171C);
@@ -48,13 +82,18 @@ ThemeData buildAppTheme(Brightness brightness) {
       titleTextStyle: textTheme.titleLarge,
     ),
     cardTheme: CardThemeData(
-      elevation: 0,
+      // Aspect "3D" cerut explicit de utilizator (umbre elevate, stil
+      // Material clasic) — cardurile plutesc deasupra fundalului în loc să
+      // fie plate cu doar un contur subțire. Fără `side`/border aici:
+      // umbra singură dă adâncimea, un contur suplimentar peste umbră arăta
+      // aglomerat.
+      elevation: isDark ? 6 : 4,
+      shadowColor: isDark ? Colors.black.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.18),
       color: colorScheme.surfaceContainerLow,
       surfaceTintColor: Colors.transparent,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: borderColor),
       ),
     ),
     listTileTheme: ListTileThemeData(
@@ -62,36 +101,32 @@ ThemeData buildAppTheme(Brightness brightness) {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
-    navigationBarTheme: NavigationBarThemeData(
-      elevation: 0,
-      height: 68,
-      backgroundColor: colorScheme.surfaceContainerLow,
-      surfaceTintColor: Colors.transparent,
-      indicatorColor: colorScheme.primaryContainer,
-      labelTextStyle: WidgetStateProperty.resolveWith((states) {
-        final selected = states.contains(WidgetState.selected);
-        return textTheme.labelMedium?.copyWith(
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          color: selected ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
-        );
-      }),
-    ),
     filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        elevation: 0,
-        minimumSize: const Size(0, 52),
-        textStyle: textTheme.labelLarge,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      style: ButtonStyle(
+        elevation: _pressedElevation,
+        shadowColor: WidgetStatePropertyAll(
+          isDark ? Colors.black.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.25),
+        ),
+        minimumSize: const WidgetStatePropertyAll(Size(0, 52)),
+        textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        minimumSize: const Size(0, 52),
-        textStyle: textTheme.labelLarge,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      style: ButtonStyle(
+        elevation: _pressedElevation,
+        shadowColor: WidgetStatePropertyAll(
+          isDark ? Colors.black.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.25),
+        ),
+        minimumSize: const WidgetStatePropertyAll(Size(0, 52)),
+        textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -112,7 +147,14 @@ ThemeData buildAppTheme(Brightness brightness) {
       ),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      elevation: 1,
+      // Elevația veche (fixă, 1) abia se vedea și nu avea nicio stare
+      // separată de apăsare — butonul "+ mașină" arăta plat și neschimbat
+      // la apăsare. `highlightElevation` mai mică decât `elevation` dă
+      // exact efectul de "se lasă în jos" cerut.
+      elevation: 6,
+      focusElevation: 8,
+      hoverElevation: 8,
+      highlightElevation: 2,
       backgroundColor: colorScheme.primary,
       foregroundColor: colorScheme.onPrimary,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),

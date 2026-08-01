@@ -475,6 +475,49 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   `NotificationService.instance.init()` înainte de `runApp()`. `MaterialApp` e înfășurat într-un
   `ValueListenableBuilder<String>` pe `RegionService.instance.countryCode` (cu `key: ValueKey(...)`)
   pentru rebuild reactiv la schimbarea țării.
+- `lib/theme/app_theme.dart` — `buildAppTheme(Brightness)`, folosit din `main.dart` pentru light/
+  dark. **Aspect „3D" (umbre elevate, stil Material clasic) cerut explicit de utilizator**:
+  `cardTheme` are elevație (4 light/6 dark) + `shadowColor`, fără `side`/border (umbra singură dă
+  adâncimea — un contur peste umbră arăta aglomerat). `filledButtonTheme`/`elevatedButtonTheme`
+  folosesc `ButtonStyle` cu `elevation: WidgetStateProperty` (`_pressedElevation`, funcție
+  top-level din același fișier) — 4 implicit, 6 la hover/focus, **1 la apăsare** (efectul vizual
+  de „se lasă în jos" cerut explicit) — nu doar simplul `elevation: 0` fix de dinainte.
+  `floatingActionButtonTheme` (butonul „+ mașină" din `garage_screen.dart`) avea `elevation: 1` fix,
+  fără nicio stare separată de apăsare — abia se vedea vreo umbră și nu se schimba deloc la
+  apăsare; acum `elevation: 6`, `hoverElevation`/`focusElevation: 8`, **`highlightElevation: 2`**
+  (mai mică = butonul "se lasă în jos" vizibil la apăsare). `OutlinedButton`/`TextButton` NU au
+  primit acest tratament — Flutter nu suportă elevație pe ele (doar contur/text plat), rămân pe
+  feedback-ul standard de ripple.
+  **Bara de navigare de jos NU mai e `NavigationBar`-ul din Material** (era înainte, cu elevație
+  prin `navigationBarTheme`) — testat pe device real, umbra dată de elevația temei nu se vedea
+  vizibil, iar `NavigationDestination` n-are nicio stare de apăsare separată (doar ripple).
+  Înlocuită cu `AppBottomNavBar` (`lib/widgets/app_bottom_nav_bar.dart`, widget propriu): umbră
+  desenată explicit (`BoxShadow`, garantat vizibilă, nu depinde de randarea internă a lui
+  Material) + efect de apăsare implementat manual (`GestureDetector.onTapDown/onTapUp` +
+  `AnimatedScale`, se micșorează vizibil la apăsare). Folosită identic în `main_shell.dart` (5
+  taburi) și `vehicle_detail_screen.dart` (4 taburi per mașină) — `navigationBarTheme` a fost
+  eliminat din `app_theme.dart` ca fiind acum complet nefolosit (nicio referință la
+  `NavigationBar`/`NavigationDestination` din Material mai rămâne în cod).
+  **Mărime dublă + colorat, cerut explicit imediat după prima variantă** (care era neutră,
+  `onSurface`/`onSurfaceVariant`, înălțime 68/iconițe 24/etichetă 12): `AppBottomNavBar` are acum
+  `_barHeight = 136`, `_iconSize = 48`, `_labelFontSize = 15` (dublate față de valorile inițiale —
+  eticheta nu literal dublată la 24, ar fi ieșit disproporționat sub o iconiță de 48, dar tot
+  vizibil mai mare ca înainte). `AppNavDestination` are acum un câmp `color` OBLIGATORIU (nu mai e
+  opțional cu fallback neutru) — fiecare tab din `main_shell.dart`/`vehicle_detail_screen.dart`
+  primește propria culoare din paleta nouă din `app_theme.dart`
+  (`kNavGarageColor`/`kNavHouseColor`/`kNavCostsColor`/`kNavSettingsColor` pentru taburile
+  principale, `kNavServiceColor`/`kNavDocumentsColor`/`kNavComponentsColor` pentru taburile per
+  mașină — Info de pe ambele reia `kAccentColor`, identitatea vizuală a aplicației). Tabul
+  neselectat păstrează culoarea proprie, doar estompată (`withValues(alpha: 0.55)`) — nu redevine
+  gri neutru, tot „colorat", doar mai discret decât cel activ. Cardurile
+  reale din UI care foloseau `ListTile` gol, direct în listă, fără `Card` în jur, au fost
+  înfășurate explicit ca să beneficieze de tema nouă: `DocumentTile` (widget separat, folosit din
+  4 ecrane — house/garage/vehicle_detail/home), plus alertele și reminder-urile personale din
+  `home_screen.dart`. `VehicleCard` era deja pe `Card`, a beneficiat automat doar din tema nouă.
+  **Nu extins** la alte `ListTile`-uri din aplicație (tracker-ul de componente din
+  `vehicle_detail_screen.dart`, rândurile din formulare, calendarul de costuri, Setări) — cererea
+  utilizatorului a fost specific despre mașini/documente/atenționări/taburi, nu despre tot ce
+  arată ca o listă.
 - `lib/db/database_helper.dart` — CRUD pentru vehicles, service_records, car_documents,
   reminders, component_records (FK `ON DELETE CASCADE` spre vehicle unde e cazul).
 - `lib/services/notification_service.dart` — programează/anulează notificări. **Important:**
@@ -886,10 +929,11 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     per-mașină/document — pattern deja existent pentru remindere generice). Programat/anulat din
     `HomeScreen._load`, condiționat de `vehicles.isNotEmpty` (fără sens pe o aplicație goală, abia
     instalată). De asemenea, ecranul de scanare talon (`add_edit_vehicle_screen.dart`,
-    `_scanTalon`) are acum un fallback simetric celui existent pentru „dată ITP găsită”: dacă
-    OCR-ul NU găsește o dată ITP pe poză, arată un dialog care oferă completarea manuală imediată
-    (`showDatePicker`), în loc să lase tăcut câmpul necompletat — utilizatorul trebuie oricum să
-    navigheze separat la ecranul de documente ca să adauge ITP-ul manual dacă refuză.
+    `_scanTalon`) anunță acum explicit (SnackBar) dacă OCR-ul NU găsește o dată ITP pe poză, în
+    loc să lase tăcut câmpul necompletat. **Prima variantă** (dialog cu `showDatePicker` inline,
+    imediat după scanare) a fost înlocuită la cererea explicită a utilizatorului cu acest simplu
+    anunț — preferă să salveze întâi datele mașinii, apoi să adauge ITP-ul separat din ecranul de
+    documente, nu vrea fluxul de salvare a mașinii întrerupt de un date picker în plus.
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

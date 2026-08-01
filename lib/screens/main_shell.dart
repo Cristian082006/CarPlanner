@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/strings.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 import 'costs_calendar_screen.dart';
 import 'garage_screen.dart';
 import 'home_screen.dart';
@@ -64,34 +66,39 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _tabs),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: AppBottomNavBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: _onDestinationSelected,
         destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            selectedIcon: const Icon(Icons.home),
+          AppNavDestination(
+            icon: Icons.home_outlined,
+            selectedIcon: Icons.home,
             label: S.navHome,
+            color: kAccentColor,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.directions_car_outlined),
-            selectedIcon: const Icon(Icons.directions_car),
+          AppNavDestination(
+            icon: Icons.directions_car_outlined,
+            selectedIcon: Icons.directions_car,
             label: S.navGarage,
+            color: kNavGarageColor,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.home_work_outlined),
-            selectedIcon: const Icon(Icons.home_work),
+          AppNavDestination(
+            icon: Icons.home_work_outlined,
+            selectedIcon: Icons.home_work,
             label: S.navHouse,
+            color: kNavHouseColor,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.payments_outlined),
-            selectedIcon: const Icon(Icons.payments),
+          AppNavDestination(
+            icon: Icons.payments_outlined,
+            selectedIcon: Icons.payments,
             label: S.navCosts,
+            color: kNavCostsColor,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings),
+          AppNavDestination(
+            icon: Icons.settings_outlined,
+            selectedIcon: Icons.settings,
             label: S.navSettings,
+            color: kNavSettingsColor,
           ),
         ],
       ),

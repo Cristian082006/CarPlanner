@@ -220,9 +220,22 @@ class DocumentScannerService {
   /// e undeva pe text: câmpul E nu are subnumerotare ("E)", nu "E.1)"), deci
   /// nu se potrivește cu `_fieldLabel`. Pe talonul românesc real eticheta
   /// apare adesea ca simplu "E" urmat direct de spațiu și valoare, fără
-  /// punctuație — `(?![A-Za-z])` acceptă orice separator (sau capătul
-  /// liniei) după "E", dar nu confundă cuvinte care încep cu E ("Euro...").
-  static final RegExp _vinFieldCode = RegExp(r'^E(?![A-Za-z])', caseSensitive: false);
+  /// punctuație — acceptăm orice separator uzual (spațiu/paranteză/două
+  /// puncte/liniuță) sau capătul liniei după "E", dar NU o cifră.
+  ///
+  /// Bug real găsit pe o poză reală de talon (Ford Focus-CNG cu anexă,
+  /// aceeași folosită la bug-urile de mai sus) scanată pe iOS: ML Kit a citit
+  /// eticheta câmpului F.1 ca "E1" (nu "F.1" — confuzie F↔E, frecventă între
+  /// modelele de recunoaștere Android vs. iOS ale ML Kit, care diferă,
+  /// confirmat aici prima dată cu un test real pe iOS). Varianta anterioară
+  /// a regex-ului (`(?![A-Za-z])`, doar exclude o LITERĂ după E) accepta orice
+  /// non-literă, inclusiv o cifră — deci "E1 1825" se potrivea la fel de bine
+  /// ca eticheta reală "E", bucla se oprea la acest rând greșit (primul
+  /// găsit, break necondiționat) și nu mai ajungea niciodată la rândul real
+  /// "E WFOKXXGCBKDJ42375", mult mai jos pe pagină. Fix: whitelist explicit
+  /// de separatori acceptați după "E" (spațiu/`)`/`:`/`-`/capăt de linie),
+  /// care exclude implicit orice cifră.
+  static final RegExp _vinFieldCode = RegExp(r'^E(?=$|[\s):.\-])', caseSensitive: false);
 
   /// Eticheta câmpului B (data primei înmatriculări) de pe talonul
   /// armonizat UE — confirmat de utilizator că funcționează pe talonul lui
@@ -253,6 +266,15 @@ class DocumentScannerService {
   /// numele real al modelului, deci o sărim.
   static final RegExp _labelLikeWords =
       RegExp(r'model|comercial|denumire|marca|tip\b|combustibil', caseSensitive: false);
+
+  /// Codul de câmp D.1 (marcă) de pe talonul armonizat UE — căutat explicit
+  /// prin eticheta lui, la fel ca D.3 pentru model, în loc să ne bazăm doar
+  /// pe scanarea oarbă de mai jos (păstrată ca fallback): scanarea oarbă
+  /// găsește marca oriunde apare în text, dar dacă OCR-ul o citește lipită
+  /// de eticheta ei fără spațiu ("D.1FORD") sau rândul e grupat greșit cu
+  /// altul prin ambiguitățile de reconstrucție de mai sus, o ancoră explicită
+  /// pe eticheta D.1 e mai de încredere.
+  static final RegExp _makeFieldCode = RegExp(r'\bD\.?\s*1\b', caseSensitive: false);
 
   /// Codul de câmp D.3 (denumire comercială / model) de pe talonul
   /// armonizat UE — căutat separat de marcă, ca să nu depindă de poziția
@@ -407,14 +429,39 @@ class DocumentScannerService {
       break;
     }
 
-    outer:
+    // Marca, ancorată întâi de codul de câmp D.1, dacă apare pe talon — vezi
+    // comentariul de la [_makeFieldCode].
     for (var i = 0; i < lines.length; i++) {
-      final cleanLine = _stripLabel(lines[i]);
-      for (final candidate in _knownMakes) {
-        final regex = RegExp(r'\b' + RegExp.escape(candidate) + r'\b', caseSensitive: false);
-        if (!regex.hasMatch(cleanLine)) continue;
-        make = candidate;
-        break outer;
+      final labelMatch = _makeFieldCode.firstMatch(lines[i]);
+      if (labelMatch == null) continue;
+      final sameLineValue = lines[i].substring(labelMatch.end);
+      final candidates = [sameLineValue, if (i + 1 < lines.length) lines[i + 1]];
+      for (final raw in candidates) {
+        final cleanLine = _stripLabel(raw);
+        for (final candidate in _knownMakes) {
+          final regex = RegExp(r'\b' + RegExp.escape(candidate) + r'\b', caseSensitive: false);
+          if (!regex.hasMatch(cleanLine)) continue;
+          make = candidate;
+          break;
+        }
+        if (make != null) break;
+      }
+      break;
+    }
+
+    // Fără ancoră D.1 recunoscută (sau valoarea nu s-a potrivit cu nicio
+    // marcă cunoscută): scanare oarbă a întregii pagini, ca plasă de
+    // siguranță — comportamentul original.
+    if (make == null) {
+      outer:
+      for (var i = 0; i < lines.length; i++) {
+        final cleanLine = _stripLabel(lines[i]);
+        for (final candidate in _knownMakes) {
+          final regex = RegExp(r'\b' + RegExp.escape(candidate) + r'\b', caseSensitive: false);
+          if (!regex.hasMatch(cleanLine)) continue;
+          make = candidate;
+          break outer;
+        }
       }
     }
 
@@ -481,17 +528,36 @@ class DocumentScannerService {
     // toate datele dintr-o fereastră de text în jurul cuvântului-cheie (nu
     // doar pe rândul curent, fiindcă OCR-ul poate rupe caseta de ștampile în
     // mai multe rânduri/blocuri) și păstrăm cea mai târzie.
+    //
+    // Fereastra caută acum înainte ȘI după fiecare apariție a
+    // cuvântului-cheie (nu doar după prima), pe o rază mai mare (500 de
+    // caractere) — bug real raportat de utilizator: talonul cu anexă poate
+    // avea o casetă de ștampile ITP cu 3+ inspecții succesive (fiecare cu
+    // propria dată + cod stație, ex. "CL494683"/"CR677728"/"CY787274"), iar
+    // `reconstructRowsByPosition` intercalează rândurile anexei (a treia
+    // coloană a paginii) cu rândurile altor câmpuri din apropiere pe
+    // verticală — fereastra veche (doar 300 de caractere, doar DUPĂ prima
+    // apariție a cuvântului-cheie) putea rămâne fără cea mai recentă
+    // ștampilă dacă intrau destule rânduri străine între ele în textul
+    // reconstruit, sau dacă acea ștampilă ajungea intercalată ÎNAINTE de
+    // cuvântul-cheie. Nu s-a putut reproduce 1:1 cu geometrie exactă
+    // capturată de pe device (fotografia de test disponibilă nu a acoperit
+    // caseta de ștampile), deci testul de regresie de mai jos simulează
+    // scenariul cu text sintetic, nu geometrie reală.
     DateTime? itpExpiryDate;
-    final itpKeywordMatch = _itpKeyword.firstMatch(rawText);
-    if (itpKeywordMatch != null) {
-      final windowEnd =
-          (itpKeywordMatch.end + 300 > rawText.length) ? rawText.length : itpKeywordMatch.end + 300;
-      final window = rawText.substring(itpKeywordMatch.start, windowEnd);
-      final itpDates = _datePattern
-          .allMatches(window)
-          .map((m) => _parseDate(m.group(0)!))
-          .whereType<DateTime>()
-          .toList();
+    final itpKeywordMatches = _itpKeyword.allMatches(rawText).toList();
+    if (itpKeywordMatches.isNotEmpty) {
+      const windowRadius = 500;
+      final itpDates = <DateTime>[];
+      for (final match in itpKeywordMatches) {
+        final windowStart = (match.start - windowRadius < 0) ? 0 : match.start - windowRadius;
+        final windowEnd =
+            (match.end + windowRadius > rawText.length) ? rawText.length : match.end + windowRadius;
+        final window = rawText.substring(windowStart, windowEnd);
+        itpDates.addAll(
+          _datePattern.allMatches(window).map((m) => _parseDate(m.group(0)!)).whereType<DateTime>(),
+        );
+      }
       if (itpDates.isNotEmpty) {
         itpDates.sort();
         itpExpiryDate = itpDates.last;

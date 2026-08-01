@@ -520,6 +520,63 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   s-a cerut și nu a fost testat). Teste de regresie cu date geometrice simulate (bounding box-uri
   derivate din poza reală) în `test/document_scanner_service_test.dart`, grupul
   `reconstructRowsByPosition (real two-column talon layout)`.
+  **Bug real raportat pe o poză reală de talon (Ford Fiesta cu anexă, trimisă de utilizator):
+  marca (D.1) nu se completa deloc**, deși extracția de marcă folosea o scanare oarbă a întregii
+  pagini după un nume din `_knownMakes` (nu ancorată de eticheta D.1, spre deosebire de model/D.3,
+  VIN/E, an/B, putere/P.2 — toate ancorate explicit de mult, exact din cauza acestui gen de bug).
+  Cauza exactă n-a putut fi reprodusă 1:1 (fără print de debug de pe device ca la Hyundai/Ford
+  Focus de mai sus), dar scanarea oarbă e vulnerabilă la exact aceleași clase de bug deja
+  documentate aici: rând grupat greșit prin `reconstructRowsByPosition`, sau etichetă+valoare
+  citite de OCR fără spațiu între ele ("D.1FORD"). Fix: adăugată o ancoră explicită pe eticheta
+  D.1 (`_makeFieldCode`, la fel ca `_modelFieldCode`), încercată ÎNTÂI — ia valoarea de pe același
+  rând sau de pe rândul următor și o verifică față de `_knownMakes`; scanarea oarbă rămâne ca
+  fallback dacă ancora nu găsește nimic (talon fără etichetă D.1 recognoscibilă, sau valoare
+  negăsită în listă). Teste de regresie (geometrie aproximativă, nu exactă — vezi comentariul din
+  cod) în `test/document_scanner_service_test.dart`, grupul `D.1 (make) extraction — real Ford
+  Fiesta talon`, plus un test adăugat retroactiv pentru marca (Hyundai) pe geometria reală deja
+  existentă de la bug-ul anterior (grupul Hyundai Tucson), care nu verifica deloc `result.make`
+  până acum.
+  **Bug real găsit imediat după, pe iOS — prima diferență confirmată între ML Kit
+  Android vs. iOS pe acest proiect:** utilizatorul a raportat că VIN-ul (câmpul E) nu se completa
+  pe iPhone, deși pe Android (aceeași poză, Ford Focus-CNG cu anexă, deja folosită ca test la
+  bug-urile de mai sus) funcționa corect. Diagnosticat cu un print de debug TEMPORAR în
+  `scanTalon` (eliminat după — geometria capturată a rămas ca test permanent), rulat live pe un
+  iPhone conectat prin USB (`flutter run --debug -d <device-id>`; conexiunea WIRELESS a eșuat
+  repetat cu „Dart VM Service was not discovered” — pentru debug live cu print-uri pe iOS,
+  preferă USB, wireless funcționează OK doar pentru `flutter install`/build simplu, nu pentru
+  atașarea VM-ului). Cauza: modelul ML Kit de pe iOS a citit eticheta câmpului **F.1 ca „E1”**
+  (confuzie F↔E, specifică modelului iOS — pe Android aceeași poză citea corect „F1”/„F.1”).
+  Vechiul regex al etichetei VIN (`_vinFieldCode = RegExp(r'^E(?![A-Za-z])')`) exclude explicit
+  doar o LITERĂ după „E”, deci accepta orice altceva, inclusiv o cifră — „E1 1825” se potrivea la
+  fel de bine ca eticheta reală „E”, bucla de căutare (care se oprește necondiționat la primul
+  rând găsit, ca la toate celelalte câmpuri ancorate din acest fișier) se bloca acolo și nu mai
+  ajungea niciodată la rândul real „E WFOKXXGCBKDJ42375”, mult mai jos pe pagină. Fix: regex
+  restrâns la o listă explicită de separatori acceptați după „E” (spațiu/`)`/`:`/`.`/`-`/capăt de
+  linie) — exclude implicit orice cifră, la fel ca o literă. Test de regresie cu geometria EXACTĂ
+  capturată de pe iPhone în `test/document_scanner_service_test.dart`, grupul „reconstructRowsBy
+  Position (three-column talon with anexă)”, testul „reproduces the real iOS Ford Focus scan”.
+  **Îmbunătățire cerută explicit imediat după (fără reproducere 1:1 cu date reale — vezi mai
+  jos):** utilizatorul a cerut ca data ITP extrasă să fie mereu cea mai recentă din caseta de
+  ștampile succesive a anexei (ex. 3 inspecții: 05.12.2023/CL494683, 29.11.2024/CR677728,
+  10.12.2026/CY787274), nu prima găsită. Design-ul deja documentat mai sus la [_itpKeyword]
+  spunea că trebuie luată „cea mai târzie dată”, dar implementarea avea două limitări reale: (1)
+  fereastra de căutare pornea DOAR de la prima apariție a cuvântului-cheie și se întindea DOAR
+  înainte (300 de caractere), niciodată înapoi — o ștampilă mai recentă putea ajunge, prin
+  reordonarea pe rânduri a `reconstructRowsByPosition`, înaintea cuvântului-cheie în textul
+  reconstruit și rămânea complet neluată în calcul; (2) fereastra se calcula o singură dată, de la
+  prima apariție — dacă alte câmpuri ale paginii se intercalau între ștampile în textul
+  reconstruit, o ștampilă mai îndepărtată ieșea din raza de 300 de caractere. Fix: acum se
+  folosesc TOATE aparițiile cuvântului-cheie din pagină (`_itpKeyword.allMatches`, nu doar
+  `firstMatch`), fiecare cu o fereastră ±500 de caractere (înainte ȘI după), iar toate datele
+  găsite în oricare din aceste ferestre sunt puse laolaltă înainte de a alege maximul. **Nu s-a
+  putut confirma 1:1 cu geometrie reală capturată pe device** — poza de test disponibilă în
+  sesiunea de debug (talon Ford Fiesta, IS-23-DUK) nu a acoperit caseta cu cele 3 ștampile (doar
+  primul rând, 05.12.2023, plus un artefact separat: textul OCR conținea și „Retake”/„Use Photo”,
+  butoanele ecranului de confirmare foto — semn că poza folosită la acel test nu era cea finală/
+  cropuită; de investigat separat dacă se repetă, posibil legat de fluxul `image_picker` pe iOS).
+  Teste de regresie cu text SINTETIC (nu geometrie reală) în `test/document_scanner_service_test.dart`:
+  „picks the latest ITP stamp even when other reconstructed rows push it past the old 300-char
+  window” și „picks up an ITP stamp that ends up reconstructed before the keyword occurrence”.
 - `lib/l10n/strings.dart` — clasa `S`, ~90+ getteri/metode de string, fiecare cu ramură RO/EN
   bazată pe `RegionService.instance.language`. Orice text nou afișat în UI trebuie adăugat aici,
   NU hardcodat în ecran.

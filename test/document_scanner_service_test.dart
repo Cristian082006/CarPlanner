@@ -112,6 +112,42 @@ Inspectie tehnica periodica
     expect(result.itpExpiryDate, DateTime(2024, 3, 20));
   });
 
+  test('picks the latest ITP stamp even when other reconstructed rows push it past the old '
+      '300-char window', () {
+    // Regresie: talon cu anexă (3 ștampile succesive, fiecare cu propriul
+    // cod de stație — CL.../CR.../CY... ca pe un talon real) unde
+    // reconstrucția pe rânduri intercalează text din alte câmpuri ale
+    // paginii (nume, adresă, anvelope) între cuvântul-cheie și ștampilele
+    // ulterioare, împingând cea mai recentă dată dincolo de vechea fereastră
+    // de 300 de caractere (dar tot în raza noii ferestre, 500). Umplutura e
+    // dimensionată explicit (~350 de caractere) ca să pice exact în golul de
+    // interes — nici prea aproape (n-ar mai testa nimic), nici prea departe
+    // (ar depăși și fereastra nouă, testând altceva).
+    final filler = 'X' * 350;
+    final result = scanner.parseTalonText('''
+Inspectii tehnice periodice
+05.12.2023 ITPIS
+$filler
+10.12.2026 CR677728
+''');
+
+    expect(result.itpExpiryDate, DateTime(2026, 12, 10));
+  });
+
+  test('picks up an ITP stamp that ends up reconstructed before the keyword occurrence', () {
+    // Aceeași clasă de bug ca mai sus, dar cu ștampila mai recentă
+    // intercalată ÎNAINTE de cuvântul-cheie în textul reconstruit (posibil
+    // dacă rândul ei ajunge sortat mai sus pe verticală) — fereastra veche
+    // căuta doar ÎNAINTE→DUPĂ prima apariție, niciodată înapoi.
+    final result = scanner.parseTalonText('''
+10.12.2026 CR677728
+Inspectii tehnice periodice
+05.12.2023 ITPIS
+''');
+
+    expect(result.itpExpiryDate, DateTime(2026, 12, 10));
+  });
+
   test('does not confuse a distant date with the ITP expiry (outside the keyword window)', () {
     final result = scanner.parseTalonText('B) 15.03.2016');
 
@@ -266,6 +302,64 @@ Inspectii tehnice periodice
       expect(reconstructed, contains('B 18.03.2013 H'));
       expect(reconstructed, contains('Pi 1596 P2 88'));
     });
+
+    // Geometria EXACTĂ raportată de ML Kit pe iOS, pe ACEEAȘI poză de talon
+    // (Ford Focus-CNG) ca mai sus — capturată printr-un print de debug
+    // temporar direct de pe un iPhone real. Bug real raportat de utilizator:
+    // VIN-ul nu se completa deloc pe iOS, deși funcționa pe Android cu
+    // aceeași poză (geometria `realFordFocusTalon` de mai sus, capturată pe
+    // Android). Cauza: modelul ML Kit de pe iOS citește eticheta câmpului
+    // F.1 ca "E1" (confuzie F↔E), nu "F1"/"F.1" ca pe Android — iar vechiul
+    // regex al etichetei VIN (`^E(?![A-Za-z])`, doar exclude o literă după
+    // E) accepta orice non-literă, inclusiv cifra din "E1", deci bucla de
+    // căutare se oprea la acest rând greșit, mult înainte de rândul real
+    // "E WFOKXXGCBKDJ42375".
+    const realFordFocusTalonIOS = <PositionedTextLine>[
+      (text: 'A N-72-AGA', top: 169.0, left: 224.0, width: 206.0, height: 33.0),
+      (text: 'JAUTOTURISM MI', top: 200.0, left: 217.0, width: 308.0, height: 33.0),
+      (text: 'D1 FORD-CNG TECHNIK', top: 232.0, left: 206.0, width: 372.0, height: 34.0),
+      (text: 'D2 DYB-LPG MUDAIK', top: 267.0, left: 231.0, width: 305.0, height: 34.0),
+      (text: 'D.3 FOCUS', top: 301.0, left: 232.0, width: 143.0, height: 34.0),
+      (text: 'E WFOKXXGCBKDJ42375', top: 334.0, left: 221.0, width: 368.0, height: 38.0),
+      (text: 'K el32007/46*1289*03', top: 369.0, left: 236.0, width: 313.0, height: 35.0),
+      (text: 'C.2C21 UNGUREANU', top: 402.0, left: 227.0, width: 326.0, height: 43.0),
+      (text: 'C.22 GETA', top: 481.0, left: 248.0, width: 146.0, height: 27.0),
+      (text: 'C23 Nr- com BORCA sat BORCA Jud.', top: 536.0, left: 248.0, width: 499.0, height: 41.0),
+      (text: 'NEAMT', top: 582.0, left: 268.0, width: 106.0, height: 30.0),
+      (text: 'c2-C1', top: 634.0, left: 667.0, width: 103.0, height: 31.0),
+      (text: 'C3 C.3.1', top: 688.0, left: 254.0, width: 109.0, height: 30.0),
+      (text: 'C.32', top: 757.0, left: 258.0, width: 60.0, height: 19.0),
+      (text: 'C.3.3', top: 818.0, left: 270.0, width: 57.0, height: 22.0),
+      (text: 'B 18.03.2013', top: 168.0, left: 807.0, width: 165.0, height: 25.0),
+      (text: 'I 27.12.2023', top: 200.0, left: 808.0, width: 164.0, height: 26.0),
+      (text: 'E1 1825', top: 229.0, left: 805.0, width: 100.0, height: 35.0),
+      (text: 'P1 1596', top: 262.0, left: 808.0, width: 99.0, height: 33.0),
+      (text: 'H', top: 174.0, left: 1071.0, width: 14.0, height: 16.0),
+      (text: ')1.1 27.12.2023', top: 194.0, left: 1058.0, width: 177.0, height: 29.0),
+      (text: 'G 1346', top: 227.0, left: 1073.0, width: 96.0, height: 28.0),
+      (text: 'P3 BENZINA+GPL ]Q', top: 296.0, left: 797.0, width: 296.0, height: 31.0),
+      (text: 'R ALB', top: 330.0, left: 811.0, width: 91.0, height: 33.0),
+      (text: 'S.15', top: 369.0, left: 813.0, width: 50.0, height: 25.0),
+      (text: 'Y R676308', top: 398.0, left: 813.0, width: 143.0, height: 31.0),
+      (text: 'Observațil', top: 446.0, left: 814.0, width: 77.0, height: 18.0),
+      (text: 'S.2', top: 371.0, left: 1078.0, width: 31.0, height: 17.0),
+      (text: 'Z SRPCIV Neamt', top: 396.0, left: 1041.0, width: 174.0, height: 26.0),
+      (text: 'P2 88', top: 260.0, left: 1074.0, width: 70.0, height: 31.0),
+      (text: 'ANEXA', top: 153.0, left: 1566.0, width: 55.0, height: 18.0),
+      (text: 'NR.', top: 202.0, left: 1397.0, width: 30.0, height: 15.0),
+      (text: 'NO0486715T', top: 206.0, left: 1466.0, width: 164.0, height: 21.0),
+      (text: 'Numärul de NT-72-AGA', top: 227.0, left: 1368.0, width: 250.0, height: 19.0),
+    ];
+
+    test('reproduces the real iOS Ford Focus scan: VIN survives the E1/F.1 OCR mix-up', () {
+      final reconstructed = reconstructRowsByPosition(realFordFocusTalonIOS);
+      final result = scanner.parseTalonText(reconstructed);
+
+      expect(reconstructed, contains('E1 1825'));
+      expect(reconstructed, contains('E WFOKXXGCBKDJ42375'));
+      expect(result.model, 'FOCUS');
+      expect(result.vin, 'WFOKXXGCBKDJ42375'.replaceAll('O', '0'));
+    });
   });
 
   group('reconstructRowsByPosition (real Hyundai Tucson talon with anexă)', () {
@@ -315,6 +409,67 @@ Inspectii tehnice periodice
 
       expect(result.model, 'TUCSON');
       expect(result.year, 2016);
+    });
+
+    test('parseTalonText also extracts the make (D.1) from the real Hyundai scan', () {
+      final result = scanner.parseTalonText(reconstructRowsByPosition(realHyundaiTucsonTalon));
+
+      expect(result.make, 'Hyundai');
+    });
+  });
+
+  group('D.1 (make) extraction — real Ford Fiesta talon', () {
+    // Reprodus pe o poză reală de talon (Ford Fiesta, cu anexă) trimisă de
+    // utilizator: marca nu se completa deloc, deși D.1 FORD apare clar,
+    // vizual, pe același rând, în coloana din stânga (A/J/D.1/D.2/D.3/E/K),
+    // separată printr-un gol orizontal mare de coloana din mijloc
+    // (B/I/F.1/P.1/P.3/R/S.15/Y) și de anexa din dreapta. Geometrie
+    // aproximativă, calibrată proporțional pe pozele reale deja capturate
+    // mai sus (Ford Focus/Hyundai Tucson) — nu exactă (nu există un print de
+    // debug de pe acest device anume), dar suficientă ca să acopere ancora
+    // D.1 nou adăugată.
+    const realFordFiestaTalon = <PositionedTextLine>[
+      (text: 'A IS-23-DUK', top: 120.0, left: 20.0, width: 180.0, height: 30.0),
+      (text: 'J AUTOTURISM M1', top: 155.0, left: 20.0, width: 220.0, height: 30.0),
+      (text: 'D.1 FORD', top: 190.0, left: 20.0, width: 140.0, height: 30.0),
+      (text: 'D.2 JA8 HHJE1J', top: 225.0, left: 20.0, width: 210.0, height: 30.0),
+      (text: 'D.3 FIESTA', top: 260.0, left: 20.0, width: 150.0, height: 30.0),
+      (text: 'E WF0JXXGAJJ9C89735', top: 295.0, left: 20.0, width: 300.0, height: 30.0),
+      (text: 'B 24.09.2009', top: 120.0, left: 500.0, width: 160.0, height: 30.0),
+      (text: 'F.1 1545', top: 190.0, left: 500.0, width: 100.0, height: 30.0),
+      (text: 'P.3 MOTORINA', top: 260.0, left: 500.0, width: 180.0, height: 30.0),
+    ];
+
+    test('reconstructs D.1 FORD on its own row, unmerged with the middle column', () {
+      final reconstructed = reconstructRowsByPosition(realFordFiestaTalon);
+
+      expect(reconstructed, contains('D.1 FORD'));
+    });
+
+    test('parseTalonText extracts make Ford and model Fiesta', () {
+      final result = scanner.parseTalonText(reconstructRowsByPosition(realFordFiestaTalon));
+
+      expect(result.make, 'Ford');
+      expect(result.model, 'FIESTA');
+    });
+
+    test('extracts the make even when OCR merges the D.1 label onto the value with no space', () {
+      // Variantă plauzibilă de citire OCR: eticheta și valoarea ajung un
+      // singur token, fără spațiu — _stripLabel tot trebuie s-o recunoască
+      // (regex-ul de etichetă acceptă zero spații după cifră).
+      final result = scanner.parseTalonText('D.1FORD\nD.3 FIESTA');
+
+      expect(result.make, 'Ford');
+    });
+
+    test('falls back to a blind scan when D.1 gets paired with the wrong value', () {
+      // Simulează bug-ul de reconstrucție deja documentat mai sus (D.2 la
+      // Hyundai): eticheta D.1 rămâne goală/grupată greșit cu o altă
+      // valoare, dar "FORD" tot apare undeva pe pagină, ca rând separat —
+      // scanarea oarbă de rezervă tot trebuie să-l găsească.
+      final result = scanner.parseTalonText('D.1 24.09.2009\nFORD\nD.3 FIESTA');
+
+      expect(result.make, 'Ford');
     });
   });
 

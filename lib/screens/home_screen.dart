@@ -86,6 +86,16 @@ class HomeScreenState extends State<HomeScreen> {
     for (final vehicle in vehicles) {
       await NotificationService.instance.scheduleMileageReminder(vehicle);
     }
+    // Reminder global de backup — vezi comentariul de la
+    // `scheduleBackupReminder` (nu poate fi legat de momentul ștergerii
+    // efective a aplicației, doar de un interval periodic). Anulat dacă nu
+    // mai există nicio mașină, ca să nu deranjeze un utilizator care abia a
+    // instalat aplicația și n-are încă date de pierdut.
+    if (vehicles.isNotEmpty) {
+      await NotificationService.instance.scheduleBackupReminder();
+    } else {
+      await NotificationService.instance.cancelBackupReminder();
+    }
   }
 
   @override

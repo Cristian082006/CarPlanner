@@ -220,6 +220,56 @@ class NotificationService {
     await _cancel(_idFor(vehicleId, 900));
   }
 
+  /// Id fix (nu per-vehicul/document — cheie de string constantă, la fel ca
+  /// `_idFor(key, 0)` folosit mai jos pentru remindere generice) pentru
+  /// reminder-ul global de backup.
+  int get _backupReminderId => _idFor('backup_reminder', 0);
+
+  /// Reminder recurent (o dată pe lună, ziua 1 la ora 10) care încurajează
+  /// exportul unui backup — cerut explicit de utilizator. **Nu există niciun
+  /// hook la nivel de OS care să anunțe aplicația ÎNAINTE ca utilizatorul s-o
+  /// dezinstaleze** (nici Android, nici iOS nu oferă așa ceva unei aplicații
+  /// obișnuite, fără entitlements speciale) — deci „reamintește chiar în
+  /// momentul ștergerii” nu e tehnic posibil. Cel mai apropiat echivalent
+  /// practic: un reminder periodic, suficient de des încât să nu treacă mult
+  /// timp de la ultimul backup dacă utilizatorul chiar șterge aplicația
+  /// între timp. Idempotent, apelabil oricând (la fel ca
+  /// `scheduleMileageReminder`) — programat/anulat din `HomeScreen._load`,
+  /// condiționat de existența a cel puțin unei mașini (nu are sens un
+  /// reminder de backup pe o aplicație complet goală).
+  Future<void> scheduleBackupReminder() async {
+    final scheduled = _nextOccurrence(1, hour: 10);
+    try {
+      await _plugin.zonedSchedule(
+        _backupReminderId,
+        S.backupReminderTitle,
+        S.backupReminderBody,
+        scheduled,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'car_planner_reminders',
+            S.notificationChannelName,
+            channelDescription: S.notificationChannelDescription,
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: const DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.dayOfMonthAndTime,
+      );
+    } catch (_) {
+      // Idem restul serviciului: nu blocăm încărcarea ecranului dacă
+      // plugin-ul de notificări eșuează.
+    }
+  }
+
+  Future<void> cancelBackupReminder() async {
+    await _cancel(_backupReminderId);
+  }
+
   /// Prima aparitie viitoare a zilei [day] din lună, la ora [hour] — punctul
   /// de plecare pentru `matchDateTimeComponents: dayOfMonthAndTime` (care
   /// preia de-aici doar componentele zi/oră și repetă lunar).

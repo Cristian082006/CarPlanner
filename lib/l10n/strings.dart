@@ -138,6 +138,12 @@ class S {
       : 'Found an ITP expiry date: $date. Save it as an ITP document for this car?';
   static String get itpExpiryApplied =>
       _ro ? 'Documentul ITP a fost actualizat.' : 'The ITP document was updated.';
+  static String get itpExpiryNotFoundTitle =>
+      _ro ? 'Data ITP nu a putut fi citită' : 'Could not read the ITP expiry date';
+  static String get itpExpiryNotFoundBody => _ro
+      ? 'Nu am găsit o dată de valabilitate ITP pe poză (talon vechi, ștampilă scrisă de mână greu lizibilă etc.). Vrei s-o completezi manual acum?'
+      : "Could not find an ITP expiry date on the photo (older registration, hard-to-read handwritten stamp, etc.). Want to enter it manually now?";
+  static String get itpExpiryEnterManually => _ro ? 'Completează manual' : 'Enter manually';
 
   // ---------- Add/Edit service record screen ----------
   static String get editServiceRecord => _ro ? 'Editează revizia' : 'Edit service record';
@@ -370,6 +376,11 @@ class S {
   static String get mileageReminderBody => _ro
       ? 'Introdu kilometrajul curent ca să vezi statusul la zi al componentelor.'
       : 'Enter the current mileage to keep component statuses up to date.';
+  static String get backupReminderTitle =>
+      _ro ? 'Ai un backup recent?' : 'Have a recent backup?';
+  static String get backupReminderBody => _ro
+      ? 'Aplicația nu are cloud — dacă ștergi CarPlanner fără backup, datele se pierd definitiv. Exportă unul din Setări.'
+      : "The app has no cloud sync — deleting CarPlanner without a backup loses your data for good. Export one from Settings.";
 
   // ---------- Settings screen ----------
   static String get settingsTitle => _ro ? 'Setări' : 'Settings';

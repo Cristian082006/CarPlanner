@@ -875,6 +875,21 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     `parseTalonText`/`scanTalon` din `document_scanner_service.dart` — testabilă direct, cu un
     `Directory` temporar oarecare (`test/backup_service_test.dart`, sqflite FFI, același pattern ca
     `test/ford_fiesta_test.dart`), fără să depindă de path_provider real.
+    **Reminder de backup, cerut explicit imediat după („reamintește la ștergerea aplicației”):**
+    **tehnic imposibil ca atare** — nici Android, nici iOS nu oferă unei aplicații obișnuite (fără
+    entitlements speciale) niciun hook care s-o anunțe ÎNAINTE de a fi dezinstalată. Implementat
+    cel mai apropiat echivalent practic: `NotificationService.scheduleBackupReminder()`, un
+    reminder local recurent (o dată pe lună, ziua 1 la ora 10, `matchDateTimeComponents:
+    dayOfMonthAndTime` — exact același mecanism ca `scheduleMileageReminder`) care încurajează un
+    export periodic, ca să nu treacă mult timp de la ultimul backup dacă utilizatorul chiar șterge
+    aplicația între timp. Id fix (`_idFor('backup_reminder', 0)`, cheie de string constantă, nu
+    per-mașină/document — pattern deja existent pentru remindere generice). Programat/anulat din
+    `HomeScreen._load`, condiționat de `vehicles.isNotEmpty` (fără sens pe o aplicație goală, abia
+    instalată). De asemenea, ecranul de scanare talon (`add_edit_vehicle_screen.dart`,
+    `_scanTalon`) are acum un fallback simetric celui existent pentru „dată ITP găsită”: dacă
+    OCR-ul NU găsește o dată ITP pe poză, arată un dialog care oferă completarea manuală imediată
+    (`showDatePicker`), în loc să lase tăcut câmpul necompletat — utilizatorul trebuie oricum să
+    navigheze separat la ecranul de documente ca să adauge ITP-ul manual dacă refuză.
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

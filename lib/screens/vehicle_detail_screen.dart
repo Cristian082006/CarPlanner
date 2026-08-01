@@ -16,6 +16,7 @@ import '../utils/vin_decoder.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/document_tile.dart';
 import '../widgets/engine_candidates_dialog.dart';
+import '../widgets/pressable.dart';
 import '../widgets/service_record_tile.dart';
 import 'add_edit_document_screen.dart';
 import 'add_edit_service_record_screen.dart';
@@ -84,7 +85,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
             onPressed: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => AddEditVehicleScreen(vehicle: vehicle)),
+                MaterialPageRoute(
+                    builder: (_) => AddEditVehicleScreen(vehicle: vehicle)),
               );
               _load();
             },
@@ -96,7 +98,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
         children: [
           _InfoTab(vehicle: vehicle, onChanged: _load),
           _RecordsTab(vehicle: vehicle, records: _records, onChanged: _load),
-          _DocumentsTab(vehicle: vehicle, documents: _documents, onChanged: _load),
+          _DocumentsTab(
+              vehicle: vehicle, documents: _documents, onChanged: _load),
           _ComponentsTab(
             vehicle: vehicle,
             componentRecords: _componentRecords,
@@ -196,10 +199,11 @@ class _InfoTab extends StatelessWidget {
   }
 
   static String _engineDisplayName(Map<String, Object?> engine) {
-    final parts = [engine['marca_nume'], engine['model_nume'], engine['model_generatie']]
-        .whereType<String>()
-        .where((s) => s.isNotEmpty)
-        .join(' ');
+    final parts = [
+      engine['marca_nume'],
+      engine['model_nume'],
+      engine['model_generatie']
+    ].whereType<String>().where((s) => s.isNotEmpty).join(' ');
     final comercial = engine['denumire_comerciala'] as String?;
     final label = comercial?.isNotEmpty == true ? '$parts — $comercial' : parts;
     return '$label (${engine['cod_motor']})';
@@ -234,14 +238,17 @@ class _InfoTab extends StatelessWidget {
       }
     }
 
-    final engine = await db.getEngineForCode(engineCode, make: vehicle.make, model: vehicle.model);
+    final engine = await db.getEngineForCode(engineCode,
+        make: vehicle.make, model: vehicle.model);
     final engineRows = engine != null
         ? await db.getMaintenanceIntervalsForMotorId(engine['id'] as int)
         : <Map<String, Object?>>[];
-    final engineDisplayName = engine != null ? _engineDisplayName(engine) : null;
+    final engineDisplayName =
+        engine != null ? _engineDisplayName(engine) : null;
 
     final fallbackProfile = engineRows.isEmpty
-        ? resolveMaintenanceProfile(make: vehicle.make, model: vehicle.model, year: vehicle.year)
+        ? resolveMaintenanceProfile(
+            make: vehicle.make, model: vehicle.model, year: vehicle.year)
         : null;
 
     if (!context.mounted) return;
@@ -253,15 +260,21 @@ class _InfoTab extends StatelessWidget {
           engineRows.isNotEmpty
               ? S.applyMaintenanceProfileBodyEngine(
                   engineDisplayName!,
-                  engineRows.map((r) => r['componenta'] as String).toSet().join(', '),
+                  engineRows
+                      .map((r) => r['componenta'] as String)
+                      .toSet()
+                      .join(', '),
                 )
               : fallbackProfile != null
                   ? S.applyMaintenanceProfileBody(fallbackProfile.displayName)
                   : S.applyMaintenanceProfileBodyUnknown(label),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(S.cancel)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(S.apply)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(S.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true), child: Text(S.apply)),
         ],
       ),
     );
@@ -275,7 +288,8 @@ class _InfoTab extends StatelessWidget {
 
     if (engineRows.isNotEmpty) {
       for (final row in engineRows) {
-        for (final componentId in _componentIdsForName(row['componenta'] as String)) {
+        for (final componentId
+            in _componentIdsForName(row['componenta'] as String)) {
           if (!essentialComponents.any((d) => d.id == componentId) &&
               !existingExtras.contains(componentId)) {
             await db.addExtraComponent(vehicle.id, componentId);
@@ -301,8 +315,8 @@ class _InfoTab extends StatelessWidget {
               .resetComponentNotificationState(vehicle.id, componentId);
           final definition = findComponentDefinition(componentId);
           if (definition != null) {
-            await NotificationService.instance
-                .scheduleComponentReminder(definition, updatedRecord, vehicle.name);
+            await NotificationService.instance.scheduleComponentReminder(
+                definition, updatedRecord, vehicle.name);
           }
           updatedCount++;
         }
@@ -325,8 +339,8 @@ class _InfoTab extends StatelessWidget {
             .resetComponentNotificationState(vehicle.id, componentId);
         final definition = findComponentDefinition(componentId);
         if (definition != null) {
-          await NotificationService.instance
-              .scheduleComponentReminder(definition, updatedRecord, vehicle.name);
+          await NotificationService.instance.scheduleComponentReminder(
+              definition, updatedRecord, vehicle.name);
         }
         updatedCount++;
       }
@@ -351,7 +365,8 @@ class _InfoTab extends StatelessWidget {
 
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(S.maintenanceProfileApplied(updatedCount, addedCount))),
+      SnackBar(
+          content: Text(S.maintenanceProfileApplied(updatedCount, addedCount))),
     );
     onChanged();
   }
@@ -364,8 +379,10 @@ class _InfoTab extends StatelessWidget {
       if (vehicle.year != null) MapEntry(S.year, vehicle.year.toString()),
       MapEntry(S.plateNumber, vehicle.plateNumber),
       if (vehicle.vin?.isNotEmpty == true) MapEntry(S.vin, vehicle.vin!),
-      if (vehicle.fuelType?.isNotEmpty == true) MapEntry(S.fuelType, vehicle.fuelType!),
-      if (vehicle.engineCode?.isNotEmpty == true) MapEntry(S.engineCode, vehicle.engineCode!),
+      if (vehicle.fuelType?.isNotEmpty == true)
+        MapEntry(S.fuelType, vehicle.fuelType!),
+      if (vehicle.engineCode?.isNotEmpty == true)
+        MapEntry(S.engineCode, vehicle.engineCode!),
       MapEntry(S.currentMileage, '${vehicle.mileage} km'),
     ];
     return ListView(
@@ -375,8 +392,13 @@ class _InfoTab extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 children: [
-                  SizedBox(width: 160, child: Text(r.key, style: const TextStyle(color: Colors.grey))),
-                  Expanded(child: Text(r.value, style: const TextStyle(fontWeight: FontWeight.w600))),
+                  SizedBox(
+                      width: 160,
+                      child: Text(r.key,
+                          style: const TextStyle(color: Colors.grey))),
+                  Expanded(
+                      child: Text(r.value,
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
                 ],
               ),
             )),
@@ -388,7 +410,8 @@ class _InfoTab extends StatelessWidget {
           ),
           onPressed: () => _applyMaintenanceProfile(context),
           icon: const Icon(Icons.checklist_rtl_outlined),
-          label: Text(S.suggestMaintenanceProfile('${vehicle.make} ${vehicle.model}'.trim())),
+          label: Text(S.suggestMaintenanceProfile(
+              '${vehicle.make} ${vehicle.model}'.trim())),
         ),
       ],
     );
@@ -400,7 +423,8 @@ class _RecordsTab extends StatelessWidget {
   final List<ServiceRecord> records;
   final VoidCallback onChanged;
 
-  const _RecordsTab({required this.vehicle, required this.records, required this.onChanged});
+  const _RecordsTab(
+      {required this.vehicle, required this.records, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -418,7 +442,8 @@ class _RecordsTab extends StatelessWidget {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => AddEditServiceRecordScreen(vehicle: vehicle, record: r),
+                        builder: (_) => AddEditServiceRecordScreen(
+                            vehicle: vehicle, record: r),
                       ),
                     );
                     onChanged();
@@ -426,16 +451,19 @@ class _RecordsTab extends StatelessWidget {
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'serviceRecordFab',
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => AddEditServiceRecordScreen(vehicle: vehicle)),
-          );
-          onChanged();
-        },
-        child: const Icon(Icons.add),
+      floatingActionButton: Pressable(
+        child: FloatingActionButton(
+          heroTag: 'serviceRecordFab',
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => AddEditServiceRecordScreen(vehicle: vehicle)),
+            );
+            onChanged();
+          },
+          child: const Icon(Icons.add),
+        ),
       ),
     );
   }
@@ -446,7 +474,10 @@ class _DocumentsTab extends StatelessWidget {
   final List<CarDocument> documents;
   final VoidCallback onChanged;
 
-  const _DocumentsTab({required this.vehicle, required this.documents, required this.onChanged});
+  const _DocumentsTab(
+      {required this.vehicle,
+      required this.documents,
+      required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -467,7 +498,8 @@ class _DocumentsTab extends StatelessWidget {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => AddEditDocumentScreen(vehicleId: vehicle.id, document: d),
+                        builder: (_) => AddEditDocumentScreen(
+                            vehicleId: vehicle.id, document: d),
                       ),
                     );
                     onChanged();
@@ -475,16 +507,19 @@ class _DocumentsTab extends StatelessWidget {
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'vehicleDocumentsFab',
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => AddEditDocumentScreen(vehicleId: vehicle.id)),
-          );
-          onChanged();
-        },
-        child: const Icon(Icons.add),
+      floatingActionButton: Pressable(
+        child: FloatingActionButton(
+          heroTag: 'vehicleDocumentsFab',
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => AddEditDocumentScreen(vehicleId: vehicle.id)),
+            );
+            onChanged();
+          },
+          child: const Icon(Icons.add),
+        ),
       ),
     );
   }
@@ -505,7 +540,9 @@ class _ComponentsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recordsByComponent = {for (final r in componentRecords) r.componentId: r};
+    final recordsByComponent = {
+      for (final r in componentRecords) r.componentId: r
+    };
     final components = [
       ...essentialComponents,
       ...extraComponentCatalog.where((d) => extraComponentIds.contains(d.id)),
@@ -526,7 +563,8 @@ class _ComponentsTab extends StatelessWidget {
         final subtitleParts = <String>[
           '${S.intervalPrefix}${definition.effectiveIntervalLabel(record)}'
               '${record?.customIntervalSource != null ? S.customIntervalSuffix(record!.customIntervalSource!) : ''}',
-          if (record?.lastChangedDate != null || record?.lastChangedMileage != null)
+          if (record?.lastChangedDate != null ||
+              record?.lastChangedMileage != null)
             '${S.lastChangedPrefix}${formatDate(record?.lastChangedDate)}'
                 '${record?.lastChangedMileage != null ? ' · ${record!.lastChangedMileage} km' : ''}'
           else
@@ -549,7 +587,10 @@ class _ComponentsTab extends StatelessWidget {
             ),
             child: Text(
               status.label,
-              style: TextStyle(color: status.color, fontWeight: FontWeight.w600, fontSize: 12),
+              style: TextStyle(
+                  color: status.color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12),
             ),
           ),
           onTap: () async {

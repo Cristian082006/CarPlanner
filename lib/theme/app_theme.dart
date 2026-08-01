@@ -48,6 +48,19 @@ WidgetStateProperty<double> get _pressedElevation => WidgetStateProperty.resolve
       return 4;
     });
 
+/// Variantă mai discretă a [_pressedElevation], pentru `OutlinedButton`/
+/// `TextButton` — butoane concepute să fie mai puțin proeminente decât
+/// `FilledButton`/`ElevatedButton` (spec Material: nu ar trebui să
+/// „plutească" la fel de tare), dar tot cerute explicit să aibă „același
+/// efect de apăsare" — o umbră mică, nu una la fel de mare ca la butoanele
+/// primare.
+WidgetStateProperty<double> get _pressedElevationSubtle => WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) return 0;
+      if (states.contains(WidgetState.pressed)) return 0;
+      if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) return 3;
+      return 2;
+    });
+
 const Color _lightBackground = Color(0xFFFAFAFC);
 const Color _darkBackground = Color(0xFF17171C);
 
@@ -130,20 +143,42 @@ ThemeData buildAppTheme(Brightness brightness) {
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 52),
-        textStyle: textTheme.labelLarge,
-        side: BorderSide(color: colorScheme.outline.withValues(alpha: 0.5)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      // `OutlinedButton`/`TextButton` nu au `elevation` prin constructorii
+      // convenabili (`.styleFrom`), dar `ButtonStyle` brut (aceeași bază,
+      // `ButtonStyleButton`) tot îl acceptă — cerut explicit de utilizator
+      // ("același efect de apăsare pe TOATE butoanele"). Adăugat și un fond
+      // subtil (fără el, umbra plutea sub un buton complet transparent,
+      // arăta ca o pată desprinsă de restul textului/conturului).
+      style: ButtonStyle(
+        elevation: _pressedElevationSubtle,
+        shadowColor: WidgetStatePropertyAll(
+          isDark ? Colors.black.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.25),
+        ),
+        backgroundColor: WidgetStatePropertyAll(colorScheme.surfaceContainerLow),
+        minimumSize: const WidgetStatePropertyAll(Size(0, 52)),
+        textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
+        side: WidgetStatePropertyAll(BorderSide(color: colorScheme.outline.withValues(alpha: 0.5))),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        minimumSize: const Size(0, 48),
-        textStyle: textTheme.labelLarge,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      style: ButtonStyle(
+        elevation: _pressedElevationSubtle,
+        shadowColor: WidgetStatePropertyAll(
+          isDark ? Colors.black.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.25),
+        ),
+        // Fond foarte discret (nu complet transparent) — altfel umbra
+        // pluteşte sub nimic, arată ca o pată desprinsă de text.
+        backgroundColor: WidgetStatePropertyAll(colorScheme.surfaceContainerLow.withValues(alpha: 0.5)),
+        minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
+        textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
       ),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(

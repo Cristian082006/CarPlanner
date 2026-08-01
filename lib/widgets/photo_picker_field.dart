@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../l10n/strings.dart';
 import '../theme/app_theme.dart';
+import 'pressable.dart';
 
 /// Câmp reutilizabil pentru atașarea unei poze (poză carte service, scan
 /// document etc) sau, opțional ([allowPdf]), a unui fișier PDF. Copiază
@@ -96,7 +97,8 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
     if (_path == null) return;
     final result = await OpenFilex.open(_path!);
     if (result.type != ResultType.done && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.openPdfFailed)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(S.openPdfFailed)));
     }
   }
 
@@ -105,7 +107,8 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label ?? S.attachPhoto, style: Theme.of(context).textTheme.labelLarge),
+        Text(widget.label ?? S.attachPhoto,
+            style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 8),
         if (_path != null && _isPdf)
           _PdfPreviewCard(onOpen: _openPdf, onRemove: _remove)
@@ -129,7 +132,8 @@ class _PhotoPickerFieldState extends State<PhotoPickerField> {
                   backgroundColor: Colors.black54,
                   child: IconButton(
                     padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.close, size: 18, color: Colors.white),
+                    icon:
+                        const Icon(Icons.close, size: 18, color: Colors.white),
                     onPressed: _remove,
                   ),
                 ),
@@ -193,20 +197,24 @@ class _AttachButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!scans) {
-      return OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        label: Text(plainLabel),
+      return Pressable(
+        child: OutlinedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon),
+          label: Text(plainLabel),
+        ),
       );
     }
-    return FilledButton.icon(
-      style: FilledButton.styleFrom(
-        backgroundColor: kAttentionColor,
-        foregroundColor: Colors.white,
+    return Pressable(
+      child: FilledButton.icon(
+        style: FilledButton.styleFrom(
+          backgroundColor: kAttentionColor,
+          foregroundColor: Colors.white,
+        ),
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(scanLabel),
       ),
-      onPressed: onPressed,
-      icon: Icon(icon),
-      label: Text(scanLabel),
     );
   }
 }

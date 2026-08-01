@@ -15,6 +15,7 @@ import '../utils/engine_lookup.dart';
 import '../utils/vin_decoder.dart';
 import '../widgets/engine_candidates_dialog.dart';
 import '../widgets/photo_picker_field.dart';
+import '../widgets/pressable.dart';
 
 class AddEditVehicleScreen extends StatefulWidget {
   final Vehicle? vehicle;
@@ -81,15 +82,19 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       builder: (ctx) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt_outlined),
-              title: Text(S.takePhoto),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            Pressable(
+              child: ListTile(
+                leading: const Icon(Icons.camera_alt_outlined),
+                title: Text(S.takePhoto),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: Text(S.chooseFromGallery),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            Pressable(
+              child: ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: Text(S.chooseFromGallery),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
             ),
           ],
         ),
@@ -114,7 +119,9 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
-          data.fieldsFound > 0 ? S.scanFilledFields(data.fieldsFound) : S.scanNoData,
+          data.fieldsFound > 0
+              ? S.scanFilledFields(data.fieldsFound)
+              : S.scanNoData,
         ),
       ));
 
@@ -125,8 +132,12 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
             title: Text(S.itpExpiryFoundTitle),
             content: Text(S.itpExpiryFoundBody(formatDate(data.itpExpiryDate))),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(S.cancel)),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(S.save)),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(S.cancel)),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(S.save)),
             ],
           ),
         );
@@ -156,27 +167,32 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
   Future<void> _decodeVinEngine() async {
     final vin = _vinCtrl.text.trim();
     if (!isValidVinFormat(vin)) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinInvalidFormat)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(S.vinInvalidFormat)));
       return;
     }
     final make = _makeCtrl.text.trim();
     if (make.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinMakeRequired)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(S.vinMakeRequired)));
       return;
     }
 
     final model = _modelCtrl.text.trim();
-    final result = await resolveEngineCandidatesFromVin(_db, vin: vin, make: make, model: model);
+    final result = await resolveEngineCandidatesFromVin(_db,
+        vin: vin, make: make, model: model);
 
     if (!mounted) return;
-    if (result.detectedMake != null && result.detectedMake!.toLowerCase() != make.toLowerCase()) {
+    if (result.detectedMake != null &&
+        result.detectedMake!.toLowerCase() != make.toLowerCase()) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(S.vinMakeMismatch(result.detectedMake!, make)),
       ));
     }
 
     if (result.candidates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinNoEngineMatches)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(S.vinNoEngineMatches)));
       return;
     }
 
@@ -189,7 +205,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       }
     });
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.vinEngineApplied)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(S.vinEngineApplied)));
   }
 
   Future<void> _save() async {
@@ -205,7 +222,9 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
       plateNumber: _plateCtrl.text.trim(),
       vin: _vinCtrl.text.trim().isEmpty ? null : _vinCtrl.text.trim(),
       fuelType: _fuelCtrl.text.trim().isEmpty ? null : _fuelCtrl.text.trim(),
-      engineCode: _engineCodeCtrl.text.trim().isEmpty ? null : _engineCodeCtrl.text.trim(),
+      engineCode: _engineCodeCtrl.text.trim().isEmpty
+          ? null
+          : _engineCodeCtrl.text.trim(),
       mileage: int.tryParse(_mileageCtrl.text.trim()) ?? 0,
       photoPath: _photoPath,
       createdAt: widget.vehicle?.createdAt ?? DateTime.now(),
@@ -225,7 +244,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
     // checkComponentStatuses`.
     final records = await _db.getComponentRecords(vehicle.id);
     final extraIds = await _db.getExtraComponentIds(vehicle.id);
-    await NotificationService.instance.checkComponentStatuses(vehicle, records, extraIds);
+    await NotificationService.instance
+        .checkComponentStatuses(vehicle, records, extraIds);
     await NotificationService.instance.scheduleMileageReminder(vehicle);
 
     if (_pendingItpExpiry != null) {
@@ -237,19 +257,21 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
           break;
         }
       }
-      final itpDocument = existingItp?.copyWith(expiryDate: _pendingItpExpiry) ??
-          CarDocument(
-            id: const Uuid().v4(),
-            vehicleId: vehicle.id,
-            type: DocumentType.itp,
-            expiryDate: _pendingItpExpiry!,
-          );
+      final itpDocument =
+          existingItp?.copyWith(expiryDate: _pendingItpExpiry) ??
+              CarDocument(
+                id: const Uuid().v4(),
+                vehicleId: vehicle.id,
+                type: DocumentType.itp,
+                expiryDate: _pendingItpExpiry!,
+              );
       if (existingItp != null) {
         await _db.updateDocument(itpDocument);
       } else {
         await _db.insertDocument(itpDocument);
       }
-      await NotificationService.instance.scheduleDocumentReminders(itpDocument, vehicle.name);
+      await NotificationService.instance
+          .scheduleDocumentReminders(itpDocument, vehicle.name);
     }
 
     if (!mounted) return;
@@ -263,7 +285,9 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
         title: Text(S.deleteCarTitle),
         content: Text(S.deleteCarBody),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(S.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(S.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(S.delete, style: const TextStyle(color: Colors.red)),
@@ -273,7 +297,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
     );
     if (confirmed != true) return;
     await _db.deleteVehicle(widget.vehicle!.id);
-    await NotificationService.instance.cancelMileageReminder(widget.vehicle!.id);
+    await NotificationService.instance
+        .cancelMileageReminder(widget.vehicle!.id);
     if (!mounted) return;
     Navigator.pop(context);
     Navigator.pop(context);
@@ -297,20 +322,24 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: kAttentionColor,
-                foregroundColor: Colors.white,
+            Pressable(
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: kAttentionColor,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: _scanning ? null : _scanTalon,
+                icon: _scanning
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.document_scanner_outlined),
+                label: Text(
+                    _scanning ? S.readingRegistration : S.scanRegistration),
               ),
-              onPressed: _scanning ? null : _scanTalon,
-              icon: _scanning
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.document_scanner_outlined),
-              label: Text(_scanning ? S.readingRegistration : S.scanRegistration),
             ),
             const SizedBox(height: 16),
             PhotoPickerField(
@@ -322,7 +351,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
             TextFormField(
               controller: _nameCtrl,
               decoration: InputDecoration(labelText: S.nameHint),
-              validator: (v) => (v == null || v.trim().isEmpty) ? S.requiredField : null,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? S.requiredField : null,
             ),
             const SizedBox(height: 12),
             Row(
@@ -331,7 +361,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
                   child: TextFormField(
                     controller: _makeCtrl,
                     decoration: InputDecoration(labelText: S.make),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? S.required : null,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? S.required : null,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -339,7 +370,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
                   child: TextFormField(
                     controller: _modelCtrl,
                     decoration: InputDecoration(labelText: S.model),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? S.required : null,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? S.required : null,
                   ),
                 ),
               ],
@@ -359,7 +391,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
                   child: TextFormField(
                     controller: _plateCtrl,
                     decoration: InputDecoration(labelText: S.plateNumber),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? S.required : null,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? S.required : null,
                   ),
                 ),
               ],
@@ -388,7 +421,8 @@ class _AddEditVehicleScreenState extends State<AddEditVehicleScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _engineCodeCtrl,
-                    decoration: InputDecoration(labelText: S.engineCodeOptional),
+                    decoration:
+                        InputDecoration(labelText: S.engineCodeOptional),
                   ),
                 ),
               ],

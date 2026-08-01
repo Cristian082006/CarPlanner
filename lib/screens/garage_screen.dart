@@ -7,6 +7,7 @@ import '../models/vehicle.dart';
 import '../utils/alerts.dart';
 import '../utils/date_utils.dart';
 import '../widgets/document_tile.dart';
+import '../widgets/pressable.dart';
 import '../widgets/vehicle_card.dart';
 import 'add_edit_document_screen.dart';
 import 'add_edit_vehicle_screen.dart';
@@ -68,7 +69,8 @@ class GarageScreenState extends State<GarageScreen> {
           children: [
             if (_vehicles.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                 child: Text(
                   S.noCarsYet,
                   style: const TextStyle(color: Colors.grey),
@@ -76,21 +78,29 @@ class GarageScreenState extends State<GarageScreen> {
               )
             else
               ..._vehicles.map((v) {
-                final vehicleAlerts = _alerts.where((a) => a.vehicleId == v.id).toList();
-                final nearest = vehicleAlerts.isEmpty ? null : vehicleAlerts.first;
-                final vehicleDocs = _allDocuments.where((d) => d.vehicleId == v.id).toList()
+                final vehicleAlerts =
+                    _alerts.where((a) => a.vehicleId == v.id).toList();
+                final nearest =
+                    vehicleAlerts.isEmpty ? null : vehicleAlerts.first;
+                final vehicleDocs = _allDocuments
+                    .where((d) => d.vehicleId == v.id)
+                    .toList()
                   ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     VehicleCard(
                       vehicle: v,
-                      alertText: nearest != null ? daysUntilLabel(nearest.daysUntil) : null,
+                      alertText: nearest != null
+                          ? daysUntilLabel(nearest.daysUntil)
+                          : null,
                       alertColor: nearest?.color,
                       onTap: () async {
                         await Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => VehicleDetailScreen(vehicleId: v.id)),
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  VehicleDetailScreen(vehicleId: v.id)),
                         );
                         _load();
                       },
@@ -106,8 +116,8 @@ class GarageScreenState extends State<GarageScreen> {
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      AddEditDocumentScreen(vehicleId: v.id, document: d),
+                                  builder: (_) => AddEditDocumentScreen(
+                                      vehicleId: v.id, document: d),
                                 ),
                               );
                               _load();
@@ -123,7 +133,8 @@ class GarageScreenState extends State<GarageScreen> {
                             await Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => AddEditDocumentScreen(vehicleId: v.id),
+                                builder: (_) =>
+                                    AddEditDocumentScreen(vehicleId: v.id),
                               ),
                             );
                             _load();
@@ -139,17 +150,19 @@ class GarageScreenState extends State<GarageScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'garageFab',
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddEditVehicleScreen()),
-          );
-          _load();
-        },
-        icon: const Icon(Icons.add),
-        label: Text(S.car),
+      floatingActionButton: Pressable(
+        child: FloatingActionButton.extended(
+          heroTag: 'garageFab',
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddEditVehicleScreen()),
+            );
+            _load();
+          },
+          icon: const Icon(Icons.add),
+          label: Text(S.car),
+        ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import '../db/database_helper.dart';
 import '../l10n/strings.dart';
 import '../models/car_document.dart';
 import '../widgets/document_tile.dart';
+import '../widgets/pressable.dart';
 import 'add_edit_document_screen.dart';
 
 class HouseScreen extends StatefulWidget {
@@ -63,23 +64,26 @@ class HouseScreenState extends State<HouseScreen> {
                     _load();
                   },
                 )),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AddEditDocumentScreen(vehicleId: null),
-                    ),
-                  );
-                  _load();
-                },
-                icon: const Icon(Icons.add),
-                label: Text(S.addHomeInsurance),
-              ),
-            ),
           ],
+        ),
+      ),
+      // Mutat din lista scrollabilă (unde era un buton inline, la finalul
+      // documentelor) ca FAB fix jos — cerut explicit de utilizator, la fel
+      // ca restul butoanelor "+" din aplicație (garage/vehicle_detail).
+      floatingActionButton: Pressable(
+        child: FloatingActionButton.extended(
+          heroTag: 'houseFab',
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const AddEditDocumentScreen(vehicleId: null),
+              ),
+            );
+            _load();
+          },
+          icon: const Icon(Icons.add),
+          label: Text(S.addHomeInsurance),
         ),
       ),
     );

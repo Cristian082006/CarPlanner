@@ -485,9 +485,47 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   `floatingActionButtonTheme` (butonul „+ mașină" din `garage_screen.dart`) avea `elevation: 1` fix,
   fără nicio stare separată de apăsare — abia se vedea vreo umbră și nu se schimba deloc la
   apăsare; acum `elevation: 6`, `hoverElevation`/`focusElevation: 8`, **`highlightElevation: 2`**
-  (mai mică = butonul "se lasă în jos" vizibil la apăsare). `OutlinedButton`/`TextButton` NU au
-  primit acest tratament — Flutter nu suportă elevație pe ele (doar contur/text plat), rămân pe
-  feedback-ul standard de ripple.
+  (mai mică = butonul "se lasă în jos" vizibil la apăsare).
+  **Extins la TOATE butoanele, cerut explicit imediat după** ("fă același efect de apăsare pe
+  toate butoanele din aplicație"): `OutlinedButton`/`TextButton` NU au `elevation` prin
+  constructorii convenabili (`.styleFrom`), dar `ButtonStyle` brut (aceeași bază,
+  `ButtonStyleButton`, pe care se construiesc și `FilledButton`/`ElevatedButton`) TOT îl acceptă —
+  corectat greșeala inițială (credeam că Flutter nu suportă elevație pe ele deloc). Adăugat
+  `_pressedElevationSubtle` (0 la apăsare/2 implicit/3 la hover — mai discretă decât
+  `_pressedElevation` a butoanelor primare, ca să respecte ierarhia vizuală Material: text < outlined
+  < filled). **Fond adăugat explicit pe amândouă** (`OutlinedButton`: `surfaceContainerLow` opac;
+  `TextButton`: același, dar la 50% alpha) — fără el, umbra plutea sub un fundal complet
+  transparent, arăta ca o pată desprinsă de text/contur, nu ca un buton "3D".
+  **`IconButton` NU a primit acest tratament** — decizie conștientă, nu omisă din neatenție: multe
+  din cele 14 apariții din cod sunt butoane compacte 28×28 (`visualDensity: compact`,
+  `padding: zero`), adesea 2-3 la rând (ex. `document_tile.dart`) — o umbră pe fiecare, la o
+  mărime atât de mică, risca să arate ca o pată neclară în loc de relief, mai ales înghesuite unul
+  lângă altul. Dacă se cere explicit și pentru acestea, testează vizual pe un singur ecran înainte
+  de a aplica global prin `iconButtonTheme` (nu există în temă momentan).
+  **Efect de apăsare cerut explicit, imediat după, pe elemente pe care doar elevația nu era
+  suficient de vizibilă** (cardul mașinii, „+ mașină", „Scanare talon", „Cameră"/„Galerie"):
+  adăugat `lib/widgets/pressable.dart` (`Pressable`, widget generic) — folosește `Listener`
+  (evenimente brute de pointer), NU `GestureDetector`, tocmai ca să NU intre în conflict cu
+  `onTap`/`InkWell`-ul propriu al widget-ului înfășurat (`Listener` nu participă la arena de
+  gesturi) — poate fi pus în jurul oricărui buton/card/ListTile existent, fără să-i schimbe deloc
+  comportamentul de tap. Micșorează vizibil (scale 0.94) la apăsare, revine la ridicare — același
+  mecanism ca `AppBottomNavBar`, extras într-un widget reutilizabil. Aplicat pe: `VehicleCard`
+  (+ culoare distinctă, `kAccentColor` la alpha redus — utilizatorul raportase că nu observa
+  deloc efectul 3D pe fondul neutru anterior), toate cele 3 `FloatingActionButton` din aplicație
+  (garage + cele 2 din `vehicle_detail_screen.dart`), butonul „Scanare talon"
+  (`add_edit_vehicle_screen.dart`), opțiunile „Cameră"/„Galerie" din bottom sheet-ul aceluiași
+  ecran, și `_AttachButton` din `photo_picker_field.dart` (Cameră/Galerie/PDF — folosit din toate
+  ecranele care atașează o poză: mașină, documente, revizii). Nu s-a atins `IconButton`-urile mici
+  (motivul de mai sus rămâne valabil — `Pressable` ar funcționa tehnic și pe ele, dar riscul
+  vizual în rânduri înghesuite nu s-a schimbat).
+  **Butonul „Adaugă asigurare locuință" din `house_screen.dart` mutat ca FAB fix jos** (cerut
+  explicit) — era un `OutlinedButton.icon` inline, la finalul listei de documente, care scrolla cu
+  conținutul (deci dispărea din ecran dacă existau destule documente). Mutat în
+  `floatingActionButton` al `Scaffold`-ului, `Pressable`-wrapped ca restul FAB-urilor, `heroTag:
+  'houseFab'` (unic — `main_shell.dart` ține toate tab-urile montate simultan într-un
+  `IndexedStack`, deci FAB-urile de pe ecrane diferite pot coexista în arbore în același timp;
+  fiecare are deja propriul `heroTag` unic, la fel ca `garageFab`/`serviceRecordFab`/
+  `vehicleDocumentsFab`).
   **Bara de navigare de jos NU mai e `NavigationBar`-ul din Material** (era înainte, cu elevație
   prin `navigationBarTheme`) — testat pe device real, umbra dată de elevația temei nu se vedea
   vizibil, iar `NavigationDestination` n-are nicio stare de apăsare separată (doar ripple).

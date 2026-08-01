@@ -330,6 +330,78 @@ class DocumentScannerService {
     caseSensitive: false,
   );
 
+  /// O linie formată STRICT din cifre (1-4), fără nimic altceva — folosită
+  /// de [_looseHandwrittenDates] mai jos ca semnal că acea linie e probabil
+  /// un fragment izolat de dată (o zi, o lună, sau un an de 2/4 cifre),
+  /// scris de mână pe o ștampilă, nu text obișnuit.
+  static final RegExp _standaloneNumberLine = RegExp(r'^\d{1,4}$');
+
+  /// Best-effort, cerut explicit de utilizator, cu riscul asumat de a
+  /// produce o dată greșită: talonul poate avea ștampile ITP scrise de mână
+  /// (reînnoiri succesive) în care fiecare bucată a datei (zi/lună/an)
+  /// ajunge pe propriul rând în textul recunoscut de OCR, fără punctuație
+  /// care s-o lege de restul — [_datePattern] nu se potrivește niciodată pe
+  /// așa ceva. Căutăm, în apropierea (± [lineRadius] rânduri) unei apariții
+  /// a cuvântului-cheie ITP, cele mai apropiate 3 linii care sunt STRICT
+  /// numerice (ignorând orice altă linie dintre ele — o mâzgălitură/semnătură
+  /// nedescifrabilă de pe același rând al ștampilei NU se potrivește cu
+  /// [_standaloneNumberLine] și e sărită) și încercăm să le combinăm într-o
+  /// dată zi/lună/an. Nu garantează nimic — pe o poză reală testată (talon
+  /// Ford Fiesta cu 2 ștampile scrise de mână), luna lipsea complet din
+  /// text, înghițită de o mâzgălitură nedescifrabilă pe același rând cu
+  /// cifra zilei, deci fallback-ul n-a găsit 3 linii numerice apropiate — o
+  /// scanare mai curată sau o ștampilă mai lizibilă ar putea totuși
+  /// funcționa. Utilizatorul revede mereu data înainte de salvare, la fel ca
+  /// la orice alt câmp best-effort din acest fișier.
+  static List<DateTime> _looseHandwrittenDates(List<String> lines, int centerIndex, int lineRadius) {
+    final start = (centerIndex - lineRadius < 0) ? 0 : centerIndex - lineRadius;
+    final end = (centerIndex + lineRadius >= lines.length) ? lines.length - 1 : centerIndex + lineRadius;
+
+    final numberLineIndexes = [
+      for (var i = start; i <= end; i++)
+        if (_standaloneNumberLine.hasMatch(lines[i].trim())) i,
+    ];
+
+    final dates = <DateTime>[];
+    for (var i = 0; i + 2 < numberLineIndexes.length; i++) {
+      final a = int.parse(lines[numberLineIndexes[i]].trim());
+      final b = int.parse(lines[numberLineIndexes[i + 1]].trim());
+      final c = int.parse(lines[numberLineIndexes[i + 2]].trim());
+      final date = _tryBuildDayMonthYear(a, b, c);
+      if (date != null) dates.add(date);
+    }
+    return dates;
+  }
+
+  /// Încearcă să construiască o dată din 3 numere întregi, presupunând
+  /// ordinea zi/lună/an (ordinea în care apar de sus în jos pe o ștampilă
+  /// tipică) — un an de 2 cifre e interpretat ca 20xx (nicio ștampilă ITP nu
+  /// poate fi din secolul trecut). `null` dacă orice componentă e în afara
+  /// intervalului plauzibil, ca să nu producem o dată absurdă dintr-o
+  /// combinație întâmplătoare de cifre nelegate între ele.
+  static DateTime? _tryBuildDayMonthYear(int day, int month, int yearRaw) {
+    if (day < 1 || day > 31 || month < 1 || month > 12) return null;
+    final int year;
+    if (yearRaw >= 1000 && yearRaw <= 9999) {
+      year = yearRaw;
+    } else if (yearRaw >= 0 && yearRaw <= 99) {
+      year = 2000 + yearRaw;
+    } else {
+      return null;
+    }
+    final currentYear = DateTime.now().year;
+    if (year < currentYear - 5 || year > currentYear + 15) return null;
+    try {
+      final date = DateTime(year, month, day);
+      // `DateTime` normalizează silențios o zi invalidă (ex. 31 februarie →
+      // 3 martie) — respingem orice combinație care s-a „rostogolit" astfel.
+      if (date.day != day || date.month != month || date.year != year) return null;
+      return date;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Fotografiază → recunoaște textul → extrage câmpurile. Aruncă orice
   /// eroare a ML Kit mai departe către apelant.
   Future<ScannedVehicleData> scanTalon(String imagePath) async {
@@ -558,6 +630,20 @@ class DocumentScannerService {
           _datePattern.allMatches(window).map((m) => _parseDate(m.group(0)!)).whereType<DateTime>(),
         );
       }
+
+      // Fallback BEST-EFFORT pentru ștampile ITP scrise de mână (vezi
+      // [_looseHandwrittenDates]) — cerut explicit de utilizator, deși
+      // riscul de dată greșită e real și asumat: pe o poză reală testată
+      // (talon Ford Fiesta cu 2 ștampile scrise de mână), OCR-ul a rupt
+      // fragmentele de dată atât de tare (luna lipsea complet din text,
+      // înghițită de o mâzgălitură nedescifrabilă) încât nici acest fallback
+      // nu a putut reconstitui nimic — deci nu e o soluție garantată, doar o
+      // șansă suplimentară pe scanări mai curate decât acel exemplu.
+      for (var i = 0; i < lines.length; i++) {
+        if (!_itpKeyword.hasMatch(lines[i])) continue;
+        itpDates.addAll(_looseHandwrittenDates(lines, i, 20));
+      }
+
       if (itpDates.isNotEmpty) {
         itpDates.sort();
         itpExpiryDate = itpDates.last;

@@ -408,6 +408,25 @@ class S {
       : 'The error log always stays on the phone only — nothing is sent automatically. You can attach it manually to an email if you run into an issue.';
   static String get noErrorLogEntries =>
       _ro ? 'Niciun jurnal de erori — nu ai avut probleme.' : 'No error log yet — no issues so far.';
+  static String get backupSectionHeader => _ro ? 'Backup' : 'Backup';
+  static String get backupDescription => _ro
+      ? 'Aplicația nu are cloud — dacă ștergi aplicația, datele se pierd. Exportă un backup într-un fișier (îl poți salva în Files, iCloud Drive, email etc.) și importă-l după reinstalare ca să-ți recuperezi datele.'
+      : "The app has no cloud sync — deleting it erases your data. Export a backup file (save it to Files, iCloud Drive, email, etc.) and import it after reinstalling to get your data back.";
+  static String get exportBackupButton => _ro ? 'Exportă backup' : 'Export backup';
+  static String get exportBackupFailed =>
+      _ro ? 'Exportul backup-ului a eșuat.' : 'Backup export failed.';
+  static String get importBackupButton => _ro ? 'Importă backup' : 'Import backup';
+  static String get importBackupConfirmTitle =>
+      _ro ? 'Înlocuiești toate datele?' : 'Replace all data?';
+  static String get importBackupConfirmBody => _ro
+      ? 'Importarea unui backup ȘTERGE toate mașinile, reviziile și documentele existente în aplicație și le înlocuiește cu cele din fișier. Nu poate fi anulată.'
+      : 'Importing a backup DELETES every vehicle, service record and document currently in the app and replaces them with the ones from the file. This cannot be undone.';
+  static String get importBackupConfirmAction => _ro ? 'Înlocuiește' : 'Replace';
+  static String get importBackupSuccess =>
+      _ro ? 'Backup importat cu succes.' : 'Backup imported successfully.';
+  static String get importBackupFailed => _ro
+      ? 'Importul a eșuat — fișierul nu pare a fi un backup CarPlanner valid.'
+      : 'Import failed — the file does not look like a valid CarPlanner backup.';
   static String get privacyPolicyButton =>
       _ro ? 'Politica de confidențialitate' : 'Privacy policy';
   static String get privacyPolicyTitle =>

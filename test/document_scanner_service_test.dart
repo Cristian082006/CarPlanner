@@ -148,6 +148,65 @@ Inspectii tehnice periodice
     expect(result.itpExpiryDate, DateTime(2026, 12, 10));
   });
 
+  test('reconstructs a handwritten ITP stamp split across 3 separate digit-only lines', () {
+    // Best-effort cerut explicit de utilizator: ștampilele ITP scrise de
+    // mână apar adesea în OCR ca 3 fragmente izolate (zi/lună/an), fiecare
+    // pe propriul rând, fără punctuație care să le lege — [_datePattern]
+    // singur nu le-ar prinde niciodată. Aici e cazul "curat" (fragmente
+    // izolate, fără mâzgălituri intercalate) — pe o poză reală testată cu
+    // scris de mână ilizibil peste cifre, fallback-ul poate tot rata (vezi
+    // comentariul din cod), dar cazul curat trebuie să funcționeze.
+    final result = scanner.parseTalonText('''
+Inspectii tehnice periodice
+05.12.2023
+29
+11
+2024
+''');
+
+    expect(result.itpExpiryDate, DateTime(2024, 11, 29));
+  });
+
+  test('accepts a 2-digit handwritten year as 20xx', () {
+    final result = scanner.parseTalonText('''
+ITP
+10
+12
+26
+''');
+
+    expect(result.itpExpiryDate, DateTime(2026, 12, 10));
+  });
+
+  test('does not fabricate a date from a digit-only line that is not a valid day/month/year', () {
+    // "35" nu poate fi o zi validă — nicio combinație plauzibilă nu trebuie
+    // construită din aceste linii, ca să nu inventăm o dată greșită.
+    final result = scanner.parseTalonText('''
+ITP
+35
+99
+2024
+''');
+
+    expect(result.itpExpiryDate, isNull);
+  });
+
+  test('skips a scribbled line between date fragments (matches the real garbled OCR case)', () {
+    // Reproduce forma reală a bug-ului găsit pe device: fragmentul lunii
+    // ajunge înghițit într-o linie cu text nedescifrabil ("bat GA s.y"),
+    // deci fallback-ul nu găsește 3 linii STRICT numerice apropiate — nu
+    // trebuie să inventeze nimic din cele 2 fragmente rămase (29 și 2024).
+    final result = scanner.parseTalonText('''
+Inspectii tehnice periodice
+05.12.2023
+29
+bat GA s.y
+2024
+''');
+
+    expect(result.itpExpiryDate, DateTime(2023, 12, 5));
+  });
+
   test('does not confuse a distant date with the ITP expiry (outside the keyword window)', () {
     final result = scanner.parseTalonText('B) 15.03.2016');
 

@@ -572,11 +572,33 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
   putut confirma 1:1 cu geometrie reală capturată pe device** — poza de test disponibilă în
   sesiunea de debug (talon Ford Fiesta, IS-23-DUK) nu a acoperit caseta cu cele 3 ștampile (doar
   primul rând, 05.12.2023, plus un artefact separat: textul OCR conținea și „Retake”/„Use Photo”,
-  butoanele ecranului de confirmare foto — semn că poza folosită la acel test nu era cea finală/
-  cropuită; de investigat separat dacă se repetă, posibil legat de fluxul `image_picker` pe iOS).
+  butoanele ecranului de confirmare foto — **rezolvat, nu era bug de cod**: utilizatorul a
+  confirmat că a ales „Galerie” și a selectat un screenshot vechi — pe care mi-l trimisese chiar
+  mie, în chat, ca dovadă — în loc să facă o poză nouă cu „Cameră”; `image_picker` funcționează
+  corect când fluxul e folosit cum trebuie).
   Teste de regresie cu text SINTETIC (nu geometrie reală) în `test/document_scanner_service_test.dart`:
   „picks the latest ITP stamp even when other reconstructed rows push it past the old 300-char
   window” și „picks up an ITP stamp that ends up reconstructed before the keyword occurrence”.
+  **Fallback best-effort pentru ștampile ITP scrise de mână, cerut explicit de utilizator (imediat
+  după, cu riscul asumat de fals-pozitive):** cu o poză curată (nu screenshot) a aceluiași talon
+  Ford Fiesta, VIN-ul s-a extras corect, dar ITP-ul tot nu — de data asta cauza a fost alta:
+  captura de debug pe geometria reală a arătat că cele 2 ștampile scrise de mână (29.11.2024,
+  10.12.2026) ies din OCR ca fragmente numerice IZOLATE, fără punctuație care să le lege
+  (`_datePattern` cere explicit un singur token „zi.lună.an”) — și, mai grav, luna („11”) lipsea
+  complet din text pe acea poză, înghițită de o mâzgălitură nedescifrabilă de pe același rând cu
+  cifra zilei ("29 S2 cLA94683" → ziua 29 amestecată cu restul ștampilei). Adăugat
+  `_looseHandwrittenDates`: caută, în apropierea (±20 rânduri) fiecărei apariții a
+  cuvântului-cheie ITP, cele mai apropiate 3 linii STRICT numerice (fără alt caracter — o
+  mâzgălitură pe același rând cu o cifră o exclude automat) și încearcă să le combine într-o dată
+  zi/lună/an (an de 2 cifre interpretat ca 20xx), validând componentele (zi 1-31, lună 1-12, an în
+  ±5/+15 ani față de anul curent) ca să nu inventeze o dată absurdă dintr-o coincidență de cifre.
+  **Confirmat explicit că NU rezolvă exemplul real** (luna lipsește complet din text pe acea poză
+  — fallback-ul nu poate reconstitui date care n-au fost niciodată recunoscute de OCR), dar poate
+  ajuta pe scanări mai curate/ștampile mai lizibile decât acel exemplu — utilizatorul a ales
+  explicit să încerce euristica știind asta, în locul variantei mai sigure (fallback manual, fără
+  nicio încercare automată). Teste de regresie (text sintetic, inclusiv cazul „curat” care
+  funcționează ȘI reproducerea exactă a cazului real unde nu funcționează) în
+  `test/document_scanner_service_test.dart`.
 - `lib/l10n/strings.dart` — clasa `S`, ~90+ getteri/metode de string, fiecare cu ramură RO/EN
   bazată pe `RegionService.instance.language`. Orice text nou afișat în UI trebuie adăugat aici,
   NU hardcodat în ecran.
@@ -829,6 +851,30 @@ Stocare **exclusiv locală** pe dispozitiv (SQLite), fără backend/cloud.
     asta ca pe o schimbare de arhitectură care necesită reconfirmare explicită**, nu doar o
     adăugare de dependință — decizia „fără cloud” a fost reafirmată conștient aici, nu omisă din
     neatenție.
+16. Backup manual (export/import) — `lib/services/backup_service.dart`, secțiune „Backup” în
+    Setări. Cerut explicit de utilizator: ștergerea aplicației șterge automat containerul ei de
+    date pe iOS/Android (fără cloud, nu există „păstrare automată” — vezi principiul „fără
+    backend/cloud” de mai sus, reafirmat aici la fel ca la punctul 15/Crashlytics). „Exportă
+    backup” scrie un fișier JSON (nu o copie brută a `.db` — evită o dependință nouă de zip, vezi
+    mai jos) cu toate rândurile din tabelele de date ale utilizatorului (`vehicles`,
+    `service_records`, `car_documents`, `reminders`, `component_records`,
+    `vehicle_extra_components` — NU tabelele de catalog static, regenerate oricum la fiecare bump
+    de versiune DB) + pozele/PDF-urile atașate (`photoPath`) encodate base64 direct în același
+    fișier, apoi îl oferă prin share sheet-ul nativ (`share_plus`, la fel ca jurnalul de erori de
+    la punctul 15) — utilizatorul alege unde-l salvează (Files/iCloud Drive/email/AirDrop etc.).
+    „Importă backup” (`file_picker`) cere confirmare explicită (dialog roșu, acțiune ireversibilă)
+    apoi ȘTERGE toate datele curente și le înlocuiește cu cele din fișier — nu există merge,
+    fiindcă scenariul țintă e reinstalare pe aplicație goală, nu combinare cu date existente.
+    `photoPath`-urile absolute din backup (care indică spre directorul Documents al INSTALĂRII
+    VECHI, cu alt path) sunt rescrise spre noul director Documents după restaurarea fișierelor
+    acolo cu același nume; dacă un fișier referit lipsește din backup (nu exista pe disc la
+    momentul exportului), `photoPath`-ul e setat `null` la import, NU lăsat cu path-ul vechi
+    invalid — consistent cu restul aplicației, care tratează deja `photoPath == null` ca „fără
+    poză”. Logica de (de)serializare (`exportBackupJson`/`importBackupJson`) e separată de accesul
+    la `path_provider` (`exportBackup`/`importBackup`), la fel ca separarea
+    `parseTalonText`/`scanTalon` din `document_scanner_service.dart` — testabilă direct, cu un
+    `Directory` temporar oarecare (`test/backup_service_test.dart`, sqflite FFI, același pattern ca
+    `test/ford_fiesta_test.dart`), fără să depindă de path_provider real.
 
 ## Roadmap — NU implementat, doar documentat (nu construi fără cerere explicită)
 

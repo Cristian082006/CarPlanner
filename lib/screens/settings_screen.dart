@@ -1,9 +1,13 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/strings.dart';
+import '../services/backup_service.dart';
 import '../services/error_log_service.dart';
 import '../services/region_service.dart';
 import 'privacy_policy_screen.dart';
@@ -61,6 +65,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
   }
 
+  bool _backupBusy = false;
+
+  Future<void> _exportBackup(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _backupBusy = true);
+    try {
+      final file = await BackupService.exportBackup();
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+    } catch (_) {
+      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(S.exportBackupFailed)));
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  Future<void> _importBackup(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    final pickedPath = result?.files.single.path;
+    if (pickedPath == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(S.importBackupConfirmTitle),
+        content: Text(S.importBackupConfirmBody),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(S.cancel)),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(S.importBackupConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    setState(() => _backupBusy = true);
+    try {
+      await BackupService.importBackup(File(pickedPath));
+      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(S.importBackupSuccess)));
+    } catch (_) {
+      if (context.mounted) messenger.showSnackBar(SnackBar(content: Text(S.importBackupFailed)));
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,6 +153,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     .textTheme
                     .bodySmall
                     ?.copyWith(color: Colors.grey[600], fontStyle: FontStyle.italic),
+              ),
+              const SizedBox(height: 32),
+              _SectionHeader(S.backupSectionHeader),
+              Text(S.backupDescription, style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _backupBusy ? null : () => _exportBackup(context),
+                icon: const Icon(Icons.upload_outlined),
+                label: Text(S.exportBackupButton),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _backupBusy ? null : () => _importBackup(context),
+                icon: const Icon(Icons.download_outlined),
+                label: Text(S.importBackupButton),
               ),
               const SizedBox(height: 32),
               _SectionHeader(S.feedbackSectionHeader),
